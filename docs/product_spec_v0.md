@@ -19,7 +19,7 @@ This ensures `llms.txt` is always up to date, accurate, and optimized for discov
 - **Platform:** Vercel (Next.js app with PageRouter for UI/API).
 - **Orchestration:** Inngest (durable workflows, cron scheduling, fan-out, webhook handling, retries).
 - **Storage:**
-  - **Vercel Blob** → raw HTML, summaries, and `llms.txt`, `llms-full.txt`, and `.html.md` artifacts.
+  - **Supabase Storage** → raw HTML, summaries, and `llms.txt`, `llms-full.txt`, and `.html.md` artifacts.
   - **Supabase Postgres** → metadata (domains, pages, jobs, change fingerprints, artifact pointers).
 - **Crawling:** Firecrawl API (crawl site, structured output, webhooks).
 - **Summarization:** OpenRouter API (multi-model access; throttle/parallelize via Inngest concurrency), and optionally, using firecrawl's llms.txt generator endpoint in parallel, storing that to the domain's table as it's own blob url (firecrawl_llms_txt_url or similar)
@@ -35,10 +35,10 @@ This ensures `llms.txt` is always up to date, accurate, and optimized for discov
 3. Wait for Firecrawl webhook (crawl complete).
 4. For each URL (fan-out):
    - Fetch HTML from Firecrawl.
-   - Save HTML to Blob storage.
+   - Save HTML to Supabase Storage.
    - Save metadata to Supabase.
    - Clean + summarize content via OpenRouter.
-5. Assemble `llms.txt` + `llms-full.txt`; store in Blob.
+5. Assemble `llms.txt` + `llms-full.txt`; store in Supabase Storage.
 6. Update metadata with artifact links.
 7. Update job status = `finished`.
 8. Notify via email.
@@ -65,7 +65,7 @@ This ensures `llms.txt` is always up to date, accurate, and optimized for discov
 - **Firecrawl** → Removes need to build crawler; handles JS rendering, anti-bot, structured output.
 - **OpenRouter** → Easy way to test multiple LLMs; fallback and routing across providers.
 - **Supabase Postgres** → Central metadata/state store with relational queries.
-- **Vercel Blob** → Cheap, integrated blob store for artifacts (HTML snapshots, summaries, llms.txt).
+- **Supabase Storage** → Integrated storage with PostgreSQL, single platform for both data and files.
 - **Notifications** → Simple “job complete” email (using resend).
 
 ---
@@ -76,7 +76,7 @@ The technical spec should include:
 - **Table schemas** (domains, jobs, pages, page_versions, artifacts, tasks, eval_runs).
 - **API boundaries** between:
   - Next.js API routes (UI ↔ orchestration).
-  - Inngest workflows ↔ Supabase/Blob.
+  - Inngest workflows ↔ Supabase (Database + Storage).
   - Firecrawl ↔ Inngest (webhooks).
   - OpenRouter summarization step.
 - **Concurrency controls** (per-domain + global limits for OpenRouter).

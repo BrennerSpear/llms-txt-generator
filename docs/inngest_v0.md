@@ -61,7 +61,7 @@ type Events =
 
 - **Trigger:** Webhook event → `domain/crawl.page` (Firecrawl `type: "crawl.page"`).
 - **Steps:**  
-  1. `step.run("store-page", ...)` — persist page payload (markdown + metadata) and attach to `jobId` by writing the raw Firecrawl markdown to Blob as `firecrawl_raw.md` and storing a pointer.
+  1. `step.run("store-page", ...)` — persist page payload (markdown + metadata) and attach to `jobId` by writing the raw Firecrawl markdown to Storage as `firecrawl_raw.md` and storing a pointer.
   2. `step.sendEvent()` — emit `page/process.requested` with `{ jobId, url }` (derive `url` from payload metadata) and include a pointer to the stored markdown so the downstream processor can skip refetch.
 - **Ops note:** Page-level webhooks may arrive many times; ensure idempotency per `jobId + url + scrapeId`.
 
@@ -78,13 +78,13 @@ type Events =
   - **Throttling**: smooth OpenRouter calls (FIFO enqueue when over limit). 
 
 -- **Steps (each a retriable `step.run`)**: 
-  1. `"ingest-content"` — if webhook-provided markdown is available, load `firecrawl_raw.md` from Blob; otherwise fetch HTML snapshot (Firecrawl). Clean content to remove nav/header/footer and produce `html.md` (cleaned snapshot). Write snapshots to Blob; compute fingerprint over cleaned content.  
-  2. `"compare"` — load previous fingerprint; compute similarity; mark `changed_enough`.  
-  3. `"upsert-version"` — write `page_versions` row with metadata & blob pointers (`raw_md_blob_url` for `firecrawl_raw.md`; `html_md_blob_url` for `html.md`).  
+  1. `"ingest-content"` — if webhook-provided markdown is available, load `firecrawl_raw.md` from Storage; otherwise fetch HTML snapshot (Firecrawl). Clean content to remove nav/header/footer and produce `html.md` (cleaned snapshot). Write snapshots to Storage; compute fingerprint over cleaned content.
+  2. `"compare"` — load previous fingerprint; compute similarity; mark `changed_enough`.
+  3. `"upsert-version"` — write `page_versions` row with metadata & storage pointers (`raw_md_storage_url` for `firecrawl_raw.md`; `html_md_storage_url` for `html.md`).  
   4. `"mark-page-done"` — update per‑page status/metrics and decrement the job's pending count; emit `page/processed`.
 
 **Inputs:** `{ jobId, url }`  
-**Outputs:** side effects (Blob, DB rows).
+**Outputs:** side effects (Storage, DB rows).
 
 ---
 
@@ -107,10 +107,10 @@ type Events =
 - **Steps:**  
   1. `"collect"` — query latest accepted `page_versions` for `jobId`.  
   2. `"compose"` — build `llms.txt` & `llms-full.txt` (generate domain-level summaries only).  
-  3. `"write-artifacts"` — upload to Blob; create `artifacts` rows.
+  3. `"write-artifacts"` — upload to Storage; create `artifacts` rows.
 
 **Inputs:** `{ jobId }`  
-**Outputs:** side effects (Blob artifacts, DB rows), then `job/finalize.requested` (next).
+**Outputs:** side effects (Storage artifacts, DB rows), then `job/finalize.requested` (next).
 
 ---
 

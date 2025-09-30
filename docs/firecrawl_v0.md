@@ -77,7 +77,7 @@ Event types we care about in v0:
 API route (e.g., `/api/webhooks/firecrawl`) that:
 - Validates the request signature.
 - Parses event type and payload.
-- For each `crawl.page`, writes the raw markdown to Blob and emits an Inngest event (see `F2` in `inngest_v0.md`).
+- For each `crawl.page`, writes the raw markdown to Storage and emits an Inngest event (see `F2` in `inngest_v0.md`).
 - For `crawl.completed`, emits a lightweight event to close the stream and potentially trigger assembly (see `F4`).
 
 Signature verification:
@@ -101,7 +101,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const event = req.body; // { type, data, ... }
 
   if (event.type === "crawl.page") {
-    // Persist raw markdown to Blob and emit our internal event
+    // Persist raw markdown to Storage and emit our internal event
     await inngest.send({ name: "domain/crawl.page", data: event });
   } else if (event.type === "crawl.completed") {
     await inngest.send({ name: "domain/crawl.completed", data: event });
@@ -157,7 +157,7 @@ Testing & debugging guidance: [Webhook Testing](https://docs.firecrawl.dev/webho
 ### Alignment with Inngest Spec
 
 - `F1` Start Crawl: we store `jobs.firecrawl_job_id` from the crawl start response.
-- `F2` Handle Crawl Page: webhook → store raw markdown to Blob → emit `page/process.requested` with pointers.
+- `F2` Handle Crawl Page: webhook → store raw markdown to Storage → emit `page/process.requested` with pointers.
 - `F4` Handle Crawl Completed: mark stream closed; if pending == 0, trigger assembly.
 - Downstream functions (`F3`, `F5`, `F6`) behave as defined in `inngest_v0.md`.
 

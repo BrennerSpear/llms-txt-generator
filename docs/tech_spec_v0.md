@@ -21,7 +21,7 @@
 - **Crawl:** Firecrawl API + webhook on completion.
 - **Summarization:** OpenRouter (parallel + throttled via Inngest concurrency).
 - **Storage:**
-  - Vercel Blob: raw HTML, `firecrawl_raw.md` (raw markdown), `html.md` (cleaned snapshot), `llms.txt`, `llms-full.txt`.
+  - Supabase Storage: raw HTML, `firecrawl_raw.md` (raw markdown), `html.md` (cleaned snapshot), `llms.txt`, `llms-full.txt`.
   - Supabase Postgres: domain/page/job metadata, diffs, artifact pointers.
 - **Notification:** Email (e.g., Resend).
 
@@ -32,7 +32,7 @@ flowchart TD
   subgraph UI_API["UI/API (Vercel Next.js)"]
     A[POST /api/domains]
     W[GET /llms.txt]:::art
-    V[(Vercel Blob)]:::store
+    V[(Supabase Storage)]:::store
   end
 
   subgraph Inngest_Workflows["Inngest Workflows"]
@@ -44,11 +44,11 @@ flowchart TD
     D{{Webhook: crawl_complete}}
     E2[Upsert page payload]
     F[Fetch/ingest content]
-    G[Store HTML/MD in Blob]
+    G[Store HTML/MD in Storage]
     I[Upsert Supabase rows]
     E3{stream closed?}
     J[Assemble llms.txt + llms-full.txt]
-    K[Write artifacts to Blob]
+    K[Write artifacts to Storage]
     L[Update job status + notify]
   end
 
@@ -142,9 +142,9 @@ CREATE TABLE page_versions (
   page_id UUID NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
   job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
   url TEXT NOT NULL,
-  html_blob_url TEXT,                          -- raw HTML snapshot (Blob)
-  raw_md_blob_url TEXT,                        -- Firecrawl raw markdown (firecrawl_raw.md)
-  html_md_blob_url TEXT,                       -- cleaned HTML-as-Markdown snapshot (html.md)
+  html_storage_url TEXT,                       -- raw HTML snapshot (Storage)
+  raw_md_storage_url TEXT,                     -- Firecrawl raw markdown (firecrawl_raw.md)
+  html_md_storage_url TEXT,                    -- cleaned HTML-as-Markdown snapshot (html.md)
   content_fingerprint TEXT NOT NULL,           -- hash of cleaned DOM/text
   prev_fingerprint TEXT,
   similarity_score REAL,                       -- 0..1 (1 same). Used to decide skip/regenerate
@@ -159,7 +159,7 @@ CREATE TABLE artifacts (
   job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
   kind TEXT NOT NULL CHECK (kind IN ('llms.txt','llms-full.txt','index.json')),
   version INT NOT NULL DEFAULT 1,               -- domain-level artifact version
-  blob_url TEXT NOT NULL,
+  storage_url TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -188,7 +188,7 @@ CREATE TABLE artifacts (
     - `crawl.page` → streamed page payload (example below)
     - `crawl.completed` → `{ firecrawlJobId, status }` (no `urls`)
 - `GET /llms.txt`, `GET /llms-full.txt`
-  - **Behavior:** 302 or streamed proxy to latest `artifacts.blob_url` for the domain.
+  - **Behavior:** 302 or streamed proxy to latest `artifacts.storage_url` for the domain.
 
 ### 4.2 Inngest Functions
 
@@ -197,13 +197,13 @@ CREATE TABLE artifacts (
 - `handle_firecrawl_complete(jobId)`  
   - Fan-out `process_url` for each URL.
 - `process_url(jobId, url)`  
-  - Fetch HTML (Firecrawl), store Blob, compute fingerprint; compare to last; if changed-enough → summarize via OpenRouter; upsert `page_versions`.
+  - Fetch HTML (Firecrawl), store to Storage, compute fingerprint; compare to last; if changed-enough → summarize via OpenRouter; upsert `page_versions`.
 - `assemble_artifacts(jobId)`  
-  - Compose `llms.txt` and `llms-full.txt` from latest accepted `page_versions`; upload to Blob; create `artifacts`.
+  - Compose `llms.txt` and `llms-full.txt` from latest accepted `page_versions`; upload to Storage; create `artifacts`.
 - `finalize_job(jobId)`  
   - Update status to `finished` (or `failed`); send email notification.
 
-**Cross-boundary notes:** Next.js ↔ Inngest; Inngest ↔ Supabase/Blob; Firecrawl ↔ Inngest (webhook); OpenRouter during summarize.
+**Cross-boundary notes:** Next.js ↔ Inngest; Inngest ↔ Supabase (Database + Storage); Firecrawl ↔ Inngest (webhook); OpenRouter during summarize.
 
 ---
 
@@ -267,7 +267,7 @@ CREATE TABLE artifacts (
 - **llms.txt:** concise, curated entries (URL, title, short LLM summary).  
 - **llms-full.txt:** exhaustive entries (longer summaries at the domain level; may reference `.html.md` for raw content).  
 - **Templates:** stored in `prompt_profiles.assemble_template` (adjustable without deploy).  
-- **Outputs:** uploaded to Vercel Blob; API routes serve/proxy the latest.
+- **Outputs:** uploaded to Supabase Storage; API routes serve/proxy the latest.
 
 ---
 
@@ -295,7 +295,7 @@ CREATE TABLE artifacts (
 
 ## 13) Deployment & Environments
 
-- **Envs:** dev / staging / prod on Vercel; separate Supabase projects & Blob namespaces.  
+- **Envs:** dev / staging / prod on Vercel; separate Supabase projects & Storage buckets.  
 - **Migrations:** SQL via Supabase migrations.  
 - **Feature flags:** profile-driven (no-deploy prompt & threshold changes).
 
@@ -360,7 +360,7 @@ Example payload:
 
 Handling notes:
 - Treat `metadata.url` as the canonical URL key; dedupe on `{ jobId, url, scrapeId }`.
-- Persist `data[].markdown` to Blob as `firecrawl_raw.md` (raw markdown). During processing, we clean to `html.md` (no nav/header/footer). Summarization produces `.pagename.md` used in `llms.txt`.
+- Persist `data[].markdown` to Storage as `firecrawl_raw.md` (raw markdown). During processing, we clean to `html.md` (no nav/header/footer). Summarization produces `.pagename.md` used in `llms.txt`.
 - If both `crawl.page` and `crawl.completed` are used, the former streams early results; the latter can still drive final fan-out for any missing URLs.
 
 ---

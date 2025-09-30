@@ -44,8 +44,8 @@ llms-txt-generator/
 │   │   │   ├── domains.ts                # Domain management
 │   │   │   ├── pages.ts                  # Page version operations
 │   │   │   └── artifacts.ts              # Artifact storage
-│   │   ├── blob/
-│   │   │   └── client.ts                 # Vercel Blob wrapper
+│   │   ├── storage/
+│   │   │   └── client.ts                 # Supabase Storage wrapper
 │   │   ├── mocks/
 │   │   │   ├── firecrawl.ts             # Firecrawl mock service
 │   │   │   ├── openrouter.ts            # OpenRouter mock service
@@ -77,7 +77,7 @@ llms-txt-generator/
 ### Step 0: Install All Dependencies (✅ COMPLETED)
 ```bash
 # Core application dependencies (ALREADY INSTALLED)
-pnpm add inngest firecrawl @vercel/blob @openrouter/ai-sdk-provider
+pnpm add inngest firecrawl @supabase/supabase-js @openrouter/ai-sdk-provider
 
 # Database (Prisma is already in package.json from T3 setup)
 # No additional installation needed
@@ -221,20 +221,60 @@ pnpm dlx inngest-cli@latest dev  # This will download and run when needed
 
 4. **Test:** Verify database connection and basic CRUD operations
 
-### Step 2: Set Up Blob Storage
-**Goal:** Configure Vercel Blob for storing raw content and artifacts
+### Step 2: Set Up Supabase Storage
+**Goal:** Configure Supabase Storage for storing raw content and artifacts
 
-1. **Configure Vercel Blob** (`.env.local`)
-   ```env
-   BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxx
+1. **Create Storage Buckets**
+   ```bash
+   # Using Supabase CLI or Dashboard, create buckets for different content types
+   supabase storage create artifacts
+   supabase storage create page-content
    ```
 
-2. **Create Blob client wrapper** (`src/lib/blob/client.ts`)
-   - Wrapper functions for upload/download
-   - Error handling and retry logic
-   - Mock mode for local development without token
+   Or programmatically in setup script:
+   ```typescript
+   // Create buckets if they don't exist
+   await supabase.storage.createBucket('artifacts', { public: false })
+   await supabase.storage.createBucket('page-content', { public: false })
+   ```
 
-3. **Test:** Upload and retrieve test content
+2. **Create Storage client wrapper** (`src/lib/storage/client.ts`)
+   ```typescript
+   import { createClient } from '@supabase/supabase-js'
+
+   const supabase = createClient(
+     process.env.NEXT_PUBLIC_SUPABASE_URL!,
+     process.env.SUPABASE_SERVICE_ROLE_KEY!
+   )
+
+   export const storage = {
+     async upload(bucket: string, path: string, content: string | Buffer) {
+       const { data, error } = await supabase.storage
+         .from(bucket)
+         .upload(path, content, {
+           contentType: 'text/plain',
+           upsert: true
+         })
+       return { data, error }
+     },
+
+     async download(bucket: string, path: string) {
+       const { data, error } = await supabase.storage
+         .from(bucket)
+         .download(path)
+       return { data, error }
+     },
+
+     getPublicUrl(bucket: string, path: string) {
+       const { data } = supabase.storage
+         .from(bucket)
+         .getPublicUrl(path)
+       return data.publicUrl
+     }
+   }
+   ```
+
+3. **Test:** Upload and retrieve test content using Supabase Storage
 
 ### Step 3: Set Up Inngest Infrastructure
 **Goal:** Configure Inngest client and serve endpoint
@@ -291,13 +331,13 @@ pnpm dlx inngest-cli@latest dev  # This will download and run when needed
 
 2. **F2 - Handle Crawl Page** (`src/lib/inngest/functions/handleCrawlPage.ts`)
    - Trigger: `domain/crawl.page` event
-   - Store page markdown (mock blob storage initially)
+   - Store page markdown to Supabase Storage
    - Emit `page/process.requested` event
    - Implement idempotency checks
 
 3. **F3 - Process Single URL** (`src/lib/inngest/functions/processUrl.ts`)
    - Trigger: `page/process.requested` event
-   - Load page content from mock storage
+   - Load page content from Supabase Storage
    - Clean content (basic implementation)
    - Compute fingerprint
    - Compare with previous version
@@ -319,7 +359,7 @@ pnpm dlx inngest-cli@latest dev  # This will download and run when needed
    - Trigger: `job/assemble.requested` event
    - Collect all page versions for job
    - Build `llms.txt` and `llms-full.txt` (basic version)
-   - Store artifacts (mock blob initially)
+   - Store artifacts to Supabase Storage
    - Emit `job/finalize.requested`
 
 3. **F6 - Finalize Job** (`src/lib/inngest/functions/finalizeJob.ts`)
@@ -410,11 +450,13 @@ pnpm dlx inngest-cli@latest dev  # This will download and run when needed
    INNGEST_EVENT_KEY=test_key_12345
    INNGEST_SIGNING_KEY=signkey_test_12345
 
-   # Database (example for local Postgres)
-   DATABASE_URL="postgresql://user:password@localhost:5432/llms_txt_dev"
+   # Database (Supabase local)
+   DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
-   # Vercel Blob (optional for local dev, can use mock)
-   BLOB_READ_WRITE_TOKEN=vercel_blob_rw_xxx
+   # Supabase (local development)
+   NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"
+   NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key-from-supabase-status"
+   SUPABASE_SERVICE_ROLE_KEY="your-service-role-key-from-supabase-status"
 
    # Firecrawl
    FIRECRAWL_API_KEY=fc_xxx  # Real key even for mocks (for types)
@@ -580,7 +622,7 @@ When ready to use real services:
 1. **Replace mock services** with actual API calls
    - Update `src/lib/firecrawl/client.ts` to use real Firecrawl SDK
    - Implement real OpenRouter integration
-   - Add proper blob storage (Vercel Blob, S3, etc.)
+   - Configure Supabase Storage buckets for production
 
 2. **Add webhook endpoint** for real Firecrawl callbacks
    - Implement signature verification
