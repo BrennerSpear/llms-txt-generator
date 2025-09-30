@@ -26,23 +26,35 @@ const mockCrawlJobs = new Map<
 
 /**
  * Mock function to start a crawl job
- * Simulates Firecrawl's crawl initiation
+ * Simulates Firecrawl's async crawl initiation
+ * Returns immediately with job ID, processes in background
  */
 export async function mockStartCrawl(
   url: string,
   options?: {
+    scrapeOptions?: {
+      formats?: unknown[]
+      proxy?: string
+      maxAge?: number
+      [key: string]: unknown
+    }
+    webhook?: {
+      url: string
+      events?: string[]
+    }
     maxPages?: number
-    webhookUrl?: string
+    limit?: number
+    [key: string]: unknown
   },
 ): Promise<CrawlResponse> {
   const domain = new URL(url).hostname
   const jobId = `mock_crawl_${Date.now()}_${Math.random().toString(36).slice(2)}`
-  const maxPages = options?.maxPages ?? 10
+  const maxPages = options?.limit ?? options?.maxPages ?? 10
 
   // Generate mock pages for this domain
   const pages = generateMockPagesForDomain(domain, maxPages)
 
-  // Store the job
+  // Store the job in "scraping" status
   mockCrawlJobs.set(jobId, {
     status: "scraping",
     totalPages: pages.length,
@@ -52,12 +64,14 @@ export async function mockStartCrawl(
     domain,
   })
 
-  // If webhook URL is provided, simulate sending webhook events
-  if (options?.webhookUrl) {
-    // Schedule mock webhook events
-    scheduleMockWebhooks(jobId, options.webhookUrl, pages)
+  // If webhook URL is provided, simulate sending webhook events asynchronously
+  if (options?.webhook?.url) {
+    // Schedule mock webhook events - this happens in background
+    scheduleMockWebhooks(jobId, options.webhook.url, pages)
   }
 
+  // Return CrawlResponse with job ID and URL
+  // The actual crawl will be processed in the background via webhooks
   return {
     id: jobId,
     url: `https://api.firecrawl.dev/v1/crawl/${jobId}`,
@@ -289,16 +303,69 @@ function generateMockSignature(payload: Record<string, unknown>): string {
 export class MockFirecrawlClient {
   constructor(private apiKey: string) {}
 
-  async crawl(
+  async startCrawl(
     url: string,
     options?: {
+      scrapeOptions?: {
+        formats?: unknown[]
+        proxy?: string
+        maxAge?: number
+        [key: string]: unknown
+      }
+      webhook?: {
+        url: string
+        events?: string[]
+      }
       maxPages?: number
-      webhookUrl?: string
+      limit?: number
+      [key: string]: unknown
     },
   ): Promise<CrawlResponse> {
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 100))
     return mockStartCrawl(url, options)
+  }
+
+  async crawl(
+    url: string,
+    options?: {
+      scrapeOptions?: {
+        formats?: unknown[]
+        proxy?: string
+        maxAge?: number
+        [key: string]: unknown
+      }
+      webhook?: {
+        url: string
+        events?: string[]
+      }
+      maxPages?: number
+      limit?: number
+      [key: string]: unknown
+    },
+  ): Promise<CrawlJob> {
+    // For the synchronous crawl method, start the crawl then wait for completion
+    const crawlResponse = await this.startCrawl(url, options)
+
+    // Simulate waiting for completion by returning the completed job
+    const job = mockCrawlJobs.get(crawlResponse.id)
+    if (!job) {
+      throw new Error(`Crawl job not found: ${crawlResponse.id}`)
+    }
+
+    // Wait a bit to simulate processing
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    // Return completed job with data
+    return {
+      status: "completed" as const,
+      total: job.pages.length,
+      completed: job.pages.length,
+      creditsUsed: job.pages.length,
+      expiresAt: new Date(Date.now() + 86400000).toISOString(),
+      next: null,
+      data: job.pages,
+    }
   }
 
   async getCrawlStatus(

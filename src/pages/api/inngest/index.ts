@@ -2,18 +2,21 @@ import type { InngestFunction } from "inngest"
 import { serve } from "inngest/next"
 import { inngest } from "~/lib/inngest/client"
 
-// Import all Inngest functions here as they're created
-// For now, we'll create a placeholder array that will be populated
-// as we implement the functions in subsequent steps
+import { handleCrawlPage } from "~/lib/inngest/functions/handleCrawlPage"
+import { processUrl } from "~/lib/inngest/functions/processUrl"
+// Import all Inngest functions
+import { startCrawl } from "~/lib/inngest/functions/startCrawl"
+// import { handleCrawlCompleted } from "~/lib/inngest/functions/handleCrawlCompleted"
+// import { assembleArtifacts } from "~/lib/inngest/functions/assembleArtifacts"
+// import { finalizeJob } from "~/lib/inngest/functions/finalizeJob"
 
-// Temporarily type as any[] until we have actual functions
 const functions: InngestFunction.Like[] = [
-  // startCrawl,         // F1 - will be imported from '~/lib/inngest/functions/startCrawl'
-  // handleCrawlPage,    // F2 - will be imported from '~/lib/inngest/functions/handleCrawlPage'
-  // processUrl,         // F3 - will be imported from '~/lib/inngest/functions/processUrl'
-  // handleCrawlCompleted, // F4 - will be imported from '~/lib/inngest/functions/handleCrawlCompleted'
-  // assembleArtifacts,  // F5 - will be imported from '~/lib/inngest/functions/assembleArtifacts'
-  // finalizeJob,        // F6 - will be imported from '~/lib/inngest/functions/finalizeJob'
+  startCrawl, // F1 - Start domain crawl
+  handleCrawlPage, // F2 - Handle incoming page from webhook
+  processUrl, // F3 - Process and analyze page content
+  // handleCrawlCompleted, // F4 - Handle crawl completion
+  // assembleArtifacts,  // F5 - Assemble llms.txt and other artifacts
+  // finalizeJob,        // F6 - Finalize job and update status
 ]
 
 // Create the Inngest serve handler for Next.js Pages Router

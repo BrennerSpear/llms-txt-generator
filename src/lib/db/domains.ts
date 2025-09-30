@@ -1,4 +1,4 @@
-import type { Domain, PromptProfile } from "@prisma/client"
+import type { Domain, Job, PromptProfile } from "@prisma/client"
 import { prisma } from "./client"
 
 export const domainService = {
@@ -24,9 +24,48 @@ export const domainService = {
   },
 
   /**
-   * Get a domain by ID
+   * Get an existing domain by name or create it with provided defaults.
+   * Always returns the domain including its prompt profile relation.
    */
-  async getById(id: string): Promise<Domain | null> {
+  async getOrCreate(data: {
+    domain: string
+    checkIntervalMinutes?: number
+    openrouterModel?: string
+    promptProfileId?: string
+    isActive?: boolean
+  }): Promise<Domain & { prompt_profile: PromptProfile | null }> {
+    // First try find to avoid unnecessary upsert writes
+    const existing = await prisma.domain.findUnique({
+      where: { domain: data.domain },
+      include: { prompt_profile: true },
+    })
+    if (existing) {
+      return existing
+    }
+
+    // Create new domain
+    const created = await prisma.domain.create({
+      data: {
+        domain: data.domain,
+        check_interval_minutes: data.checkIntervalMinutes ?? 1440,
+        openrouter_model: data.openrouterModel ?? "openai/gpt-4o-mini",
+        prompt_profile_id: data.promptProfileId,
+        is_active: data.isActive ?? true,
+      },
+      include: { prompt_profile: true },
+    })
+    return created
+  },
+
+  /**
+   * Get a domain by ID with prompt profile
+   */
+  async getById(id: string): Promise<
+    | (Domain & {
+        prompt_profile: PromptProfile | null
+      })
+    | null
+  > {
     return prisma.domain.findUnique({
       where: { id },
       include: {
@@ -36,9 +75,14 @@ export const domainService = {
   },
 
   /**
-   * Get a domain by URL
+   * Get a domain by URL with prompt profile
    */
-  async getByDomain(domain: string): Promise<Domain | null> {
+  async getByDomain(domain: string): Promise<
+    | (Domain & {
+        prompt_profile: PromptProfile | null
+      })
+    | null
+  > {
     return prisma.domain.findUnique({
       where: { domain },
       include: {
@@ -48,9 +92,13 @@ export const domainService = {
   },
 
   /**
-   * Get all active domains
+   * Get all active domains with prompt profiles
    */
-  async getActive(): Promise<Domain[]> {
+  async getActive(): Promise<
+    (Domain & {
+      prompt_profile: PromptProfile | null
+    })[]
+  > {
     return prisma.domain.findMany({
       where: { is_active: true },
       include: {
@@ -62,7 +110,12 @@ export const domainService = {
   /**
    * Get domains due for recrawl
    */
-  async getDueForRecrawl(): Promise<Domain[]> {
+  async getDueForRecrawl(): Promise<
+    (Domain & {
+      jobs: Job[]
+      prompt_profile: PromptProfile | null
+    })[]
+  > {
     const now = new Date()
 
     // Get domains with their latest job

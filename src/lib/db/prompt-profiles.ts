@@ -1,4 +1,4 @@
-import type { Prisma, PromptProfile } from "@prisma/client"
+import type { Domain, Prisma, PromptProfile } from "@prisma/client"
 import { prisma } from "./client"
 
 export const promptProfileService = {
@@ -28,9 +28,14 @@ export const promptProfileService = {
   },
 
   /**
-   * Get prompt profile by ID
+   * Get prompt profile by ID with domains
    */
-  async getById(id: string): Promise<PromptProfile | null> {
+  async getById(id: string): Promise<
+    | (PromptProfile & {
+        domains: Domain[]
+      })
+    | null
+  > {
     return prisma.promptProfile.findUnique({
       where: { id },
       include: {

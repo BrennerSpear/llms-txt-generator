@@ -1,4 +1,4 @@
-import type { Artifact, ArtifactKind } from "@prisma/client"
+import type { Artifact, ArtifactKind, Domain, Job } from "@prisma/client"
 import { prisma } from "./client"
 
 export const artifactService = {
@@ -145,9 +145,16 @@ export const artifactService = {
   },
 
   /**
-   * Get artifact by ID
+   * Get artifact by ID with job and domain
    */
-  async getById(id: string): Promise<Artifact | null> {
+  async getById(id: string): Promise<
+    | (Artifact & {
+        job: Job & {
+          domain: Domain
+        }
+      })
+    | null
+  > {
     return prisma.artifact.findUnique({
       where: { id },
       include: {

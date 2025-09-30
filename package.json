@@ -18,7 +18,9 @@
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "precommit": "pnpm run typecheck && pnpm run lint"
+    "precommit": "pnpm run typecheck && pnpm run lint",
+    "test:integration": "node test/integration-tests/simple-test.js",
+    "inngest:dev": "pnpm dlx inngest-cli@latest dev"
   },
   "dependencies": {
     "@openrouter/ai-sdk-provider": "^1.2.0",

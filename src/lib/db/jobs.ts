@@ -1,4 +1,12 @@
-import type { Job, JobStatus, JobType, Prisma } from "@prisma/client"
+import type {
+  Artifact,
+  Domain,
+  Job,
+  JobStatus,
+  JobType,
+  Page,
+  Prisma,
+} from "@prisma/client"
 import { prisma } from "./client"
 
 export const jobService = {
@@ -9,7 +17,7 @@ export const jobService = {
     domainId: string
     type: JobType
     firecrawlJobId?: string
-  }): Promise<Job> {
+  }): Promise<Job & { domain: Domain }> {
     return prisma.job.create({
       data: {
         domain_id: data.domainId,
@@ -24,9 +32,16 @@ export const jobService = {
   },
 
   /**
-   * Get a job by ID
+   * Get a job by ID with relations
    */
-  async getById(id: string): Promise<Job | null> {
+  async getById(id: string): Promise<
+    | (Job & {
+        domain: Domain
+        pages: Page[]
+        artifacts: Artifact[]
+      })
+    | null
+  > {
     return prisma.job.findUnique({
       where: { id },
       include: {
@@ -40,7 +55,12 @@ export const jobService = {
   /**
    * Get a job by Firecrawl job ID
    */
-  async getByFirecrawlId(firecrawlJobId: string): Promise<Job | null> {
+  async getByFirecrawlId(firecrawlJobId: string): Promise<
+    | (Job & {
+        domain: Domain
+      })
+    | null
+  > {
     return prisma.job.findFirst({
       where: { firecrawl_job_id: firecrawlJobId },
       include: {
@@ -95,7 +115,13 @@ export const jobService = {
   /**
    * Get latest job for a domain
    */
-  async getLatestForDomain(domainId: string): Promise<Job | null> {
+  async getLatestForDomain(domainId: string): Promise<
+    | (Job & {
+        domain: Domain
+        artifacts: Artifact[]
+      })
+    | null
+  > {
     return prisma.job.findFirst({
       where: { domain_id: domainId },
       orderBy: { started_at: "desc" },
@@ -109,7 +135,11 @@ export const jobService = {
   /**
    * Get jobs by status
    */
-  async getByStatus(status: JobStatus): Promise<Job[]> {
+  async getByStatus(status: JobStatus): Promise<
+    (Job & {
+      domain: Domain
+    })[]
+  > {
     return prisma.job.findMany({
       where: { status },
       include: {
