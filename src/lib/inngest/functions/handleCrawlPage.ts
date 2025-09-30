@@ -66,7 +66,7 @@ export const handleCrawlPage = inngest.createFunction(
     // if no `trackChanges` at all, we assume it's a new page or first crawl
     const hasChanges = !changeTracking || changeTracking.hasChanges
     // Skip if page hasn't changed significantly
-    if (hasChanges) {
+    if (!hasChanges) {
       return {
         skipped: true,
         reason: "Firecrawl did not detect any changes",
