@@ -283,7 +283,7 @@ pnpm dlx inngest-cli@latest dev  # This will download and run when needed
    - Initialize Inngest client with proper typing
    - Define event schema types matching the spec
 
-2. **Create API route handler** (`src/app/api/inngest/route.ts`)
+2. **Create API route handler** (`src/app/api/inngest/index.ts`)
    - Set up the Inngest serve endpoint for Next.js App Router
    - Configure for local development
 
