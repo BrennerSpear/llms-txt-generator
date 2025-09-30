@@ -9,3 +9,114 @@ datasource db {
     provider = "postgresql"
     url      = env("DATABASE_URL")
 }
+
+model Domain {
+    id                     String         @id @default(uuid())
+    domain                 String         @unique
+    check_interval_minutes Int            @default(1440)
+    openrouter_model       String         @default("openai/gpt-4o-mini")
+    firecrawl_llms_txt_url String?
+    prompt_profile_id      String?
+    prompt_profile         PromptProfile? @relation(fields: [prompt_profile_id], references: [id])
+    is_active              Boolean        @default(true)
+    created_at             DateTime       @default(now())
+    updated_at             DateTime       @updatedAt
+    jobs                   Job[]
+    pages                  Page[]
+
+    @@index([domain])
+}
+
+model PromptProfile {
+    id                String   @id @default(uuid())
+    name              String
+    summary_prompt    String   @db.Text
+    llms_txt_header   String?  @db.Text
+    assemble_template String?  @db.Text
+    params            Json     @default("{}")
+    version           Int      @default(1)
+    created_at        DateTime @default(now())
+    domains           Domain[]
+}
+
+model Job {
+    id               String        @id @default(uuid())
+    domain_id        String
+    domain           Domain        @relation(fields: [domain_id], references: [id])
+    type             JobType
+    status           JobStatus     @default(processing)
+    firecrawl_job_id String?
+    started_at       DateTime      @default(now())
+    finished_at      DateTime?
+    stats            Json          @default("{}")
+    pages            Page[]
+    page_versions    PageVersion[]
+    artifacts        Artifact[]
+
+    @@index([domain_id, started_at(sort: Desc)])
+}
+
+model Page {
+    id                    String        @id @default(uuid())
+    job_id                String
+    job                   Job           @relation(fields: [job_id], references: [id], onDelete: Cascade)
+    domain_id             String
+    domain                Domain        @relation(fields: [domain_id], references: [id])
+    url                   String
+    last_known_version_id String?
+    created_at            DateTime      @default(now())
+    page_versions         PageVersion[]
+
+    @@unique([domain_id, url])
+    @@index([domain_id, url])
+}
+
+model PageVersion {
+    id                  String   @id @default(uuid())
+    page_id             String
+    page                Page     @relation(fields: [page_id], references: [id], onDelete: Cascade)
+    job_id              String
+    job                 Job      @relation(fields: [job_id], references: [id], onDelete: Cascade)
+    url                 String
+    raw_md_blob_url     String?
+    html_md_blob_url    String?
+    content_fingerprint String
+    prev_fingerprint    String?
+    similarity_score    Float?
+    changed_enough      Boolean
+    reason              String?
+    created_at          DateTime @default(now())
+
+    @@index([page_id, created_at(sort: Desc)])
+    @@index([content_fingerprint])
+}
+
+model Artifact {
+    id         String       @id @default(uuid())
+    job_id     String
+    job        Job          @relation(fields: [job_id], references: [id], onDelete: Cascade)
+    kind       ArtifactKind
+    version    Int          @default(1)
+    blob_url   String
+    created_at DateTime     @default(now())
+
+    @@index([job_id])
+}
+
+enum JobType {
+    initial
+    update
+}
+
+enum JobStatus {
+    processing
+    finished
+    failed
+}
+
+enum ArtifactKind {
+    raw_md
+    html_md
+    llms_txt
+    llms_full_txt
+}
