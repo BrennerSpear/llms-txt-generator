@@ -8,9 +8,21 @@
 - pnpm
 - Docker Desktop (running)
 - Supabase CLI
+- Cloudflare tunnel (for webhook development)
 
 ```bash
+# Install Supabase CLI
 brew install supabase
+
+# Install Cloudflare tunnel
+# Option A: macOS with Homebrew
+brew install cloudflare/cloudflare/cloudflared
+
+# Option B: NPM (all platforms)
+npm install -g cloudflared
+
+# Option C: Download binary from
+# https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation
 ```
 
 2) Install dependencies
@@ -90,11 +102,12 @@ supabase start
 supabase status
 ```
 
-4) (Optional) Cloudflare Tunnel for webhooks
+4) Cloudflare Tunnel for webhooks
 
 ```bash
 cloudflared tunnel --url localhost:3000
-# Use the printed URL for any external webhook configuration
+# Copy the generated https://xxxxx.trycloudflare.com URL
+# Use this URL for Firecrawl webhook configuration
 ```
 
 5) (Optional) Prisma Studio

@@ -74,25 +74,31 @@ llms-txt-generator/
 
 ## Prerequisites & Initial Setup
 
-### Step 0: Install All Dependencies
+### Step 0: Install All Dependencies (✅ COMPLETED)
 ```bash
-# Core application dependencies
-pnpm add inngest @firecrawl/sdk openrouter @vercel/blob
+# Core application dependencies (ALREADY INSTALLED)
+pnpm add inngest firecrawl @vercel/blob @openrouter/ai-sdk-provider
 
-# Database
-pnpm add @prisma/client
-pnpm add -D prisma
+# Database (Prisma is already in package.json from T3 setup)
+# No additional installation needed
 
-# Development tools
-pnpm add -D @types/node
+# Global tools for local development (INSTALL MANUALLY)
+# These are NOT installed via pnpm install:
 
-# Global tools for local development
-pnpm dlx inngest-cli@latest dev  # Test that it works
-brew install cloudflare/cloudflare/cloudflared  # For webhook tunneling (macOS)
-# or: npm install -g cloudflared  # Alternative installation
+# 1. Cloudflare tunnel for webhook development
+# Option A: macOS with Homebrew
+brew install cloudflare/cloudflare/cloudflared
+
+# Option B: NPM (all platforms)
+npm install -g cloudflared
+
+# Option C: Download binary from https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation
+
+# 2. Inngest CLI (run on-demand, no installation needed)
+pnpm dlx inngest-cli@latest dev  # This will download and run when needed
 ```
 
-**Note:** We install the actual Firecrawl SDK to use its TypeScript types for mock data accuracy, ensuring our mocks match the expected API structure.
+**Note:** We installed the actual Firecrawl SDK (`firecrawl` package) to use its TypeScript types for mock data accuracy, ensuring our mocks match the expected API structure.
 
 ## Implementation Steps
 
@@ -487,22 +493,38 @@ brew install cloudflare/cloudflare/cloudflared  # For webhook tunneling (macOS)
 - pnpm
 - PostgreSQL (or use Docker)
 
-### Setup
-1. Install dependencies:
-   \`\`\`bash
-   pnpm install
-   \`\`\`
+### First-Time Setup
 
-2. Set up environment variables:
-   \`\`\`bash
-   cp .env.example .env.local
-   # Edit .env.local with your values
-   \`\`\`
+#### Install Global Tools
+These tools are not installed via `pnpm install` and need to be installed separately:
 
-3. Initialize database:
-   \`\`\`bash
-   pnpm db:push
-   \`\`\`
+\`\`\`bash
+# Install Cloudflare tunnel for webhook development
+# Option 1: macOS with Homebrew
+brew install cloudflare/cloudflare/cloudflared
+
+# Option 2: NPM (all platforms)
+npm install -g cloudflared
+
+# Option 3: Download binary directly from
+# https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation
+\`\`\`
+
+#### Install Dependencies
+\`\`\`bash
+pnpm install
+\`\`\`
+
+#### Set up environment variables
+\`\`\`bash
+cp .env.example .env.local
+# Edit .env.local with your values
+\`\`\`
+
+#### Initialize database
+\`\`\`bash
+pnpm db:push
+\`\`\`
 
 ### Running Locally
 Start all services in separate terminals:
@@ -514,7 +536,11 @@ pnpm dev
 # Terminal 2: Inngest Dev Server
 pnpm dlx inngest-cli@latest dev
 
-# Terminal 3: Database (if using Docker)
+# Terminal 3: Cloudflare tunnel (for webhooks)
+cloudflared tunnel --url localhost:3000
+# Copy the generated https://xxxxx.trycloudflare.com URL for webhook configuration
+
+# Terminal 4: Database (if using Docker)
 docker-compose up -d
 \`\`\`
 
