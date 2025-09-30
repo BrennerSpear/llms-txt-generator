@@ -29,9 +29,14 @@ export const pageService = {
   },
 
   /**
-   * Get a page by ID
+   * Get a page by ID with its latest version
    */
-  async getById(id: string): Promise<Page | null> {
+  async getById(id: string): Promise<
+    | (Page & {
+        page_versions: PageVersion[]
+      })
+    | null
+  > {
     return prisma.page.findUnique({
       where: { id },
       include: {
@@ -44,9 +49,13 @@ export const pageService = {
   },
 
   /**
-   * Get pages for a job
+   * Get pages for a job with their latest version
    */
-  async getByJobId(jobId: string): Promise<Page[]> {
+  async getByJobId(jobId: string): Promise<
+    (Page & {
+      page_versions: PageVersion[]
+    })[]
+  > {
     return prisma.page.findMany({
       where: { job_id: jobId },
       include: {
@@ -141,7 +150,11 @@ export const pageService = {
   /**
    * Get changed pages for a job
    */
-  async getChangedPagesForJob(jobId: string): Promise<PageVersion[]> {
+  async getChangedPagesForJob(jobId: string): Promise<
+    (PageVersion & {
+      page: Page
+    })[]
+  > {
     return prisma.pageVersion.findMany({
       where: {
         job_id: jobId,

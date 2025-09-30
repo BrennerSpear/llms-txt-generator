@@ -19,26 +19,22 @@ export const env = createEnv({
     SUPABASE_ANON_KEY: z.string().min(1).optional(),
 
     // Inngest
-    INNGEST_EVENT_KEY: z.string().min(1).optional(),
-    INNGEST_SIGNING_KEY: z.string().min(1).optional(),
+    INNGEST_EVENT_KEY: z.string().min(1),
+    INNGEST_SIGNING_KEY: z.string().min(1),
 
     // Firecrawl
-    FIRECRAWL_API_KEY: z.string().min(1).optional(),
-    FIRECRAWL_WEBHOOK_SECRET: z.string().min(1).optional(),
-    FIRECRAWL_WEBHOOK_URL: z.string().url().optional(),
+    FIRECRAWL_API_KEY: z.string().min(1),
+    FIRECRAWL_WEBHOOK_SECRET: z.string().min(1),
+    FIRECRAWL_WEBHOOK_URL: z.string().url(),
 
     // OpenRouter
-    OPENROUTER_API_KEY: z.string().min(1).optional(),
+    OPENROUTER_API_KEY: z.string().min(1),
 
     // Feature flags
     USE_MOCK_SERVICES: z
       .string()
       .transform((val) => val === "true")
       .optional(),
-
-    // Vercel (optional)
-    BLOB_READ_WRITE_TOKEN: z.string().optional(),
-    VERCEL_OIDC_TOKEN: z.string().optional(),
   },
 
   /**
@@ -81,10 +77,6 @@ export const env = createEnv({
 
     // Feature flags
     USE_MOCK_SERVICES: process.env.USE_MOCK_SERVICES,
-
-    // Vercel
-    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
-    VERCEL_OIDC_TOKEN: process.env.VERCEL_OIDC_TOKEN,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

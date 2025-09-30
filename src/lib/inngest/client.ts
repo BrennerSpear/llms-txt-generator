@@ -12,15 +12,6 @@ type DomainIngestRequested = {
   }
 }
 
-type DomainCrawlStarted = {
-  data: {
-    domainId: string
-    jobId: string
-    firecrawlJobId: string
-    startedAt: string
-  }
-}
-
 type DomainCrawlPage = {
   data: {
     domainId: string
@@ -28,8 +19,11 @@ type DomainCrawlPage = {
     firecrawlJobId: string
     url: string
     markdown: string
-    html?: string
     metadata?: DocumentMetadata
+    changeTracking?: {
+      hasChanges: boolean
+      diff?: string
+    }
     timestamp: string
   }
 }
@@ -65,7 +59,11 @@ type PageProcessRequested = {
     jobId: string
     url: string
     rawContent: string
-    htmlContent?: string
+    rawMdPath: string // Path where raw markdown from Firecrawl is stored
+    changeTracking?: {
+      hasChanges: boolean
+      diff?: string
+    }
   }
 }
 
@@ -116,7 +114,6 @@ type JobCompleted = {
 // Export the events type for use in functions
 export type Events = {
   "domain/ingest.requested": DomainIngestRequested
-  "domain/crawl.started": DomainCrawlStarted
   "domain/crawl.page": DomainCrawlPage
   "domain/crawl.completed": DomainCrawlCompleted
   "domain/crawl.failed": DomainCrawlFailed
