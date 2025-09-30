@@ -26,6 +26,104 @@ export class WebhookSimulator {
   }
 
   /**
+   * Simulate a crawl with custom pages (for testing change detection)
+   */
+  async simulateCrawlWithPages(
+    domain: string,
+    pages: Array<{
+      url?: string
+      content: string
+      metadata?: Partial<Document["metadata"]>
+    }>,
+    options: {
+      delayBetweenPages?: number
+    } = {},
+  ) {
+    const { delayBetweenPages = 100 } = options
+    const jobId = `sim_${Date.now()}_${Math.random().toString(36).slice(2)}`
+    const baseUrl = `https://${domain}`
+
+    console.log(
+      `🎭 Starting custom webhook simulation for ${domain} (Job ID: ${jobId})`,
+    )
+
+    // Send crawl.started event
+    await this.sendWebhookEvent({
+      type: "crawl.started",
+      jobId,
+      timestamp: new Date().toISOString(),
+      data: {
+        url: baseUrl,
+        totalPages: pages.length,
+        options: {
+          maxPages: pages.length,
+        },
+      },
+    })
+
+    // Send each custom page
+    const sentPages: Document[] = []
+    for (let i = 0; i < pages.length; i++) {
+      const pageData = pages[i]
+      if (!pageData) {
+        throw new Error(`Page data not found for index ${i}`)
+      }
+      const pageUrl = pageData.url || `${baseUrl}/page-${i}`
+
+      const page: Document = {
+        markdown: pageData.content,
+        html: `<html><body>${pageData.content}</body></html>`,
+        rawHtml: `<html><body>${pageData.content}</body></html>`,
+        metadata: {
+          title: `Page ${i}`,
+          description: `Custom page ${i}`,
+          sourceURL: pageUrl,
+          statusCode: 200,
+          ...pageData.metadata,
+        },
+      }
+
+      sentPages.push(page)
+
+      // Send crawl.page event with change tracking
+      await this.sendWebhookEvent({
+        type: "crawl.page",
+        jobId,
+        timestamp: new Date().toISOString(),
+        data: {
+          ...page,
+          changeTracking: {
+            hasChanges: true, // Assume all provided pages have changes
+            tag: "test",
+          },
+        },
+      })
+
+      console.log(`📄 Sent custom page ${i + 1}/${pages.length}: ${pageUrl}`)
+
+      if (i < pages.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delayBetweenPages))
+      }
+    }
+
+    // Send crawl.completed event
+    await this.sendWebhookEvent({
+      type: "crawl.completed",
+      jobId,
+      timestamp: new Date().toISOString(),
+      data: {
+        totalPages: sentPages.length,
+        pagesScraped: sentPages.length,
+        creditsUsed: sentPages.length,
+        completedAt: new Date().toISOString(),
+      },
+    })
+
+    console.log(`✅ Custom crawl simulation completed for ${domain}`)
+    return { jobId, pages: sentPages }
+  }
+
+  /**
    * Simulate a full crawl with webhook events
    */
   async simulateCrawl(

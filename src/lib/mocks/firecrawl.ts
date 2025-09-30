@@ -66,8 +66,17 @@ export async function mockStartCrawl(
 
   // If webhook URL is provided, simulate sending webhook events asynchronously
   if (options?.webhook?.url) {
+    console.log(
+      `📮 Mock Firecrawl: Scheduling webhooks to ${options.webhook.url}`,
+    )
+    console.log(`   Job ID: ${jobId}`)
+    console.log(`   Pages to send: ${pages.length}`)
     // Schedule mock webhook events - this happens in background
     scheduleMockWebhooks(jobId, options.webhook.url, pages)
+  } else {
+    console.log(
+      "⚠️ Mock Firecrawl: No webhook URL provided, skipping webhook simulation",
+    )
   }
 
   // Return CrawlResponse with job ID and URL
@@ -224,13 +233,17 @@ function scheduleMockWebhooks(
 
       // Send webhook for this page
       try {
+        console.log(
+          `📤 Sending mock webhook for page ${index + 1}/${pages.length}`,
+        )
         await sendMockWebhook(webhookUrl, {
           type: "crawl.page",
           jobId,
-          data: page,
+          data: [page], // Webhook expects an array of documents
         })
+        console.log("✅ Mock webhook sent successfully")
       } catch (error) {
-        console.error("Failed to send mock webhook:", error)
+        console.error("❌ Failed to send mock webhook:", error)
       }
 
       // If this is the last page, send completion webhook
@@ -264,7 +277,7 @@ async function sendMockWebhook(
   payload: {
     type: string
     jobId: string
-    data: Document | Record<string, unknown>
+    data: Document | Document[] | Record<string, unknown>
   },
 ) {
   try {

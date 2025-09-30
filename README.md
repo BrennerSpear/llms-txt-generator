@@ -75,6 +75,15 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=PASTE_ANON_KEY
 pnpm db:push
 ```
 
+9) Initialize Supabase storage buckets
+
+```bash
+# Create required storage buckets for local development (idempotent)
+pnpm tsx scripts/init-storage.ts
+```
+
+This creates the `artifacts` and `page-content` buckets needed for storing crawl results. The script is idempotent and safe to run multiple times.
+
 ### Running services locally
 
 Open separate terminals (or run in background) for each service:

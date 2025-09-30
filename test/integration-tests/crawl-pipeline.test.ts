@@ -13,7 +13,7 @@
 import { WebhookSimulator } from "../../src/lib/mocks/webhook-simulator"
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:3000"
-const TEST_DOMAIN = "test.integration.com"
+const TEST_DOMAIN = `test.integration.${Date.now()}.com`
 
 // Helper to wait
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -66,65 +66,100 @@ async function runIntegrationTest() {
     // Wait a bit for Inngest to create the job
     await wait(2000)
 
-    // Step 2: Get initial job status
-    console.log("\nStep 2: Checking initial job status...")
+    // Step 2: Wait for job to be created by Inngest
+    console.log("\nStep 2: Waiting for job to be created by Inngest...")
 
-    // We need to get the job ID first
-    // Since the trigger might not immediately return a job, let's poll
-    const jobId: string | null = triggerResponse.job?.id || null
-    let attempts = 0
     const domainId = triggerResponse.domain.id
+    let jobId: string | null = null
+    let firecrawlJobId: string | null = null
+    let attempts = 0
+    const maxAttempts = 10
 
-    // If no job ID yet, wait and retry from the response
-    while (!jobId && attempts < 5) {
+    // Poll for job creation (Inngest needs time to process the event)
+    while (!jobId && attempts < maxAttempts) {
       console.log(
-        `   Waiting for job to be created... (attempt ${attempts + 1})`,
+        `   Polling for job... (attempt ${attempts + 1}/${maxAttempts})`,
       )
-      await wait(1000)
+      await wait(2000)
       attempts++
 
-      // In a real integration test, you might want to add an endpoint to check
-      // domain status or latest job, but for now we'll assume the job will be
-      // in the initial response eventually
+      // Query the database directly or use an API endpoint to get latest job
+      // For now, we'll assume the job will eventually be available
+      // In a production test, you'd want to add an API endpoint to get domain's latest job
+
+      // Try to get the job by making a test request
+      try {
+        // This is a workaround - in production you'd have a proper endpoint
+        // to get the domain's latest job
+        const testResponse = await apiCall("/api/domains/crawl", {
+          method: "POST",
+          body: JSON.stringify({
+            url: TEST_DOMAIN,
+            checkIntervalMinutes: 1440,
+            openrouterModel: "openai/gpt-4o-mini",
+          }),
+        }).catch((e) => {
+          // If we get a 409, it means there's already an active job
+          if (e.message?.includes("already has an active crawl job")) {
+            // Parse the error to get the job ID
+            const errorData = JSON.parse(
+              e.message.replace("API call failed: ", ""),
+            )
+            return errorData
+          }
+          return e
+        })
+
+        if (testResponse?.activeJob?.id) {
+          jobId = testResponse.activeJob.id
+          console.log(`✅ Found active job: ${jobId}`)
+          break
+        }
+      } catch (e) {
+        // Expected - job might be in progress
+      }
     }
 
-    if (jobId) {
-      const statusResponse = await apiCall(`/api/jobs/${jobId}`)
-      console.log("✅ Job status retrieved")
-      console.log(`   Job ID: ${statusResponse.job.id}`)
-      console.log(`   Status: ${statusResponse.job.status}`)
-      console.log(`   Firecrawl Job ID: ${statusResponse.job.firecrawlJobId}`)
+    if (!jobId) {
+      console.log("❌ Job was not created after waiting")
+      throw new Error("Job creation timed out")
+    }
+
+    // Step 3: Get job details
+    console.log("\nStep 3: Getting job details...")
+    const jobResponse = await apiCall(`/api/jobs/${jobId}`)
+    console.log("✅ Job status retrieved")
+    console.log(`   Job ID: ${jobResponse.job.id}`)
+    console.log(`   Status: ${jobResponse.job.status}`)
+    console.log(`   Firecrawl Job ID: ${jobResponse.job.firecrawlJobId}`)
+
+    firecrawlJobId = jobResponse.job.firecrawlJobId
+
+    // Step 4: Check if we're in mock mode based on the Firecrawl job ID
+    // Mock job IDs start with "mock_crawl_"
+    const isMockMode = firecrawlJobId?.startsWith("mock_crawl_")
+
+    if (isMockMode) {
+      console.log("\nStep 4: Mock service is processing pages automatically...")
+      console.log(`   Mock Firecrawl Job ID: ${firecrawlJobId}`)
+      console.log("   Waiting for mock webhooks to be processed...")
+
+      // Give the mock service time to send webhooks
+      await wait(5000)
     } else {
-      console.log(
-        "⚠️  Job ID not available immediately, continuing with webhook simulation...",
-      )
+      // In real mode, we'd need to wait for actual Firecrawl webhooks
+      console.log("\nStep 4: Waiting for Firecrawl webhooks...")
+      console.log("   (In production, real Firecrawl would send webhooks)")
+      await wait(5000)
     }
 
-    // Step 3: Simulate webhook events directly to production endpoint
-    console.log(
-      "\nStep 3: Simulating Firecrawl webhook events to production endpoint...",
-    )
-
-    const webhookUrl = `${BASE_URL}/api/webhooks/firecrawl`
-    const simulator = new WebhookSimulator(webhookUrl)
-
-    const simulationResult = await simulator.simulateCrawl(TEST_DOMAIN, {
-      pageCount: 3,
-      delayBetweenPages: 500,
-      simulateFailure: false,
-    })
-
-    console.log("✅ Webhook simulation completed")
-    console.log(`   Simulated Job ID: ${simulationResult?.jobId}`)
-    console.log(`   Pages sent: ${simulationResult?.pages.length}`)
-
-    // Step 4: Wait for processing
-    console.log("\nStep 4: Waiting for processing to complete...")
+    // Step 5: Wait for processing
+    console.log("\nStep 5: Waiting for processing to complete...")
     await wait(5000) // Give Inngest time to process
 
-    // Step 5: Check final status (if we have a job ID)
+    // Step 6: Check final status (if we have a job ID)
     if (jobId) {
-      console.log("\nStep 5: Checking final job status...")
+      console.log("\nStep 6: Checking final job status...")
       const finalStatus = await apiCall(`/api/jobs/${jobId}`)
 
       console.log("📊 Final Job Status:")
@@ -135,7 +170,7 @@ async function runIntegrationTest() {
       console.log(`   Duration: ${finalStatus.job.duration || "still running"}`)
 
       // Check page details
-      if (finalStatus.pages.list.length > 0) {
+      if (finalStatus.pages?.list?.length > 0) {
         console.log("\n📄 Page Processing Results:")
         for (const page of finalStatus.pages.list) {
           console.log(`   - ${page.url}`)
@@ -162,25 +197,22 @@ async function runIntegrationTest() {
 }
 
 // Run the test if this file is executed directly
-if (require.main === module) {
-  console.log("=".repeat(60))
-  console.log("CRAWL PIPELINE INTEGRATION TEST")
-  console.log("=".repeat(60))
-  console.log("")
 
-  runIntegrationTest()
-    .then((result) => {
-      console.log(`\n${"=".repeat(60)}`)
-      console.log("TEST PASSED ✅")
-      console.log("=".repeat(60))
-      process.exit(0)
-    })
-    .catch((error) => {
-      console.log(`\n${"=".repeat(60)}`)
-      console.log("TEST FAILED ❌")
-      console.log("=".repeat(60))
-      process.exit(1)
-    })
-}
+console.log("=".repeat(60))
+console.log("CRAWL PIPELINE INTEGRATION TEST")
+console.log("=".repeat(60))
+console.log("")
 
-export { runIntegrationTest }
+runIntegrationTest()
+  .then((result) => {
+    console.log(`\n${"=".repeat(60)}`)
+    console.log("TEST PASSED ✅")
+    console.log("=".repeat(60))
+    process.exit(0)
+  })
+  .catch((error) => {
+    console.log(`\n${"=".repeat(60)}`)
+    console.log("TEST FAILED ❌")
+    console.log("=".repeat(60))
+    process.exit(1)
+  })
