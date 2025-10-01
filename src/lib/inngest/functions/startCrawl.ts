@@ -64,7 +64,8 @@ export const startCrawl = inngest.createFunction(
         `https://${domain.domain}`,
         domain.check_interval_minutes,
         webhookUrl,
-        maxPages ?? 10, // Default to 10 pages if not specified
+        100,
+        // maxPages ?? 10, // Default to 10 pages if not specified
       )
 
       return {
