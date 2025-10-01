@@ -30,6 +30,7 @@ export const processUrl = inngest.createFunction(
       rawContent,
       rawMdPath,
       changeStatus,
+      metadata,
     } = event.data
 
     // Step 1: Get job and domain information for processing context

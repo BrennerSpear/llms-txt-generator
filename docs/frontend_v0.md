@@ -68,13 +68,6 @@ This document outlines all frontend components needed for the llms.txt generator
   - Actions:
     - View raw markdown (`raw_md_blob_url`)
     - View processed HTML markdown (`html_md_blob_url`)
-    - Version history modal
-
-- **Version History Modal**:
-  - List of all versions for a page
-  - Fingerprint comparison
-  - Similarity scores between versions
-  - Diff viewer for content changes
 
 **APIs**:
 - `GET /api/domains/[domainId]` (to be created)

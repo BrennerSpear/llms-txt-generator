@@ -87,6 +87,12 @@ model PageVersion {
     change_status       String?  // "same", "updated", etc from Firecrawl (may deprecate later)
     reason              String?  // Human-readable reason for change/no-change decision
     semantic_importance Int?     @db.SmallInt // 1-4 scale (null = unchanged/no diff)
+
+    // New metadata fields
+    page_title          String?  // Title from Firecrawl metadata or AI-generated
+    page_description    String?  // One-line description (always generated)
+    page_summary        String?  @db.Text // One paragraph summary (generated if enough content)
+
     created_at          DateTime @default(now())
 
     @@index([page_id, created_at(sort: Desc)])
