@@ -346,7 +346,7 @@ pnpm dlx inngest-cli@latest dev  # This will download and run when needed
 
 4. **Test each function:** Use Inngest Dev Server to trigger and monitor execution
 
-### Step 4: Implement Coordination Functions
+### Step 6: Implement Coordination Functions
 **Goal:** Handle job completion and artifact assembly
 
 1. **F4 - Handle Crawl Completed** (`src/lib/inngest/functions/handleCrawlCompleted.ts`)
@@ -371,7 +371,7 @@ pnpm dlx inngest-cli@latest dev  # This will download and run when needed
 4. **Test end-to-end flow:** Trigger domain crawl and verify all functions execute
 
 
-### Step 6: Add Concurrency & Error Handling
+### Step 7: Add Concurrency & Error Handling
 **Goal:** Production-ready reliability
 
 1. **Implement concurrency controls**
@@ -390,22 +390,6 @@ pnpm dlx inngest-cli@latest dev  # This will download and run when needed
 
 4. **Test:** Stress test with concurrent jobs, simulate failures
 
-### Step 7: Create Testing API Endpoints
-**Goal:** Easy testing without frontend
-
-1. **Trigger endpoint** (`src/app/api/test/trigger/route.ts`)
-   - POST endpoint to start crawl for a domain
-   - Accept minimal JSON payload: `{ domainId: string }`
-
-2. **Status endpoint** (`src/app/api/test/status/[jobId]/route.ts`)
-   - GET endpoint to check job status
-   - Return current state and progress
-
-3. **Mock webhook endpoint** (`src/app/api/test/webhook/route.ts`)
-   - Simulate Firecrawl webhook events
-   - Useful for testing specific scenarios
-
-4. **Test:** Use curl/Postman to trigger and monitor jobs
 
 ## Local Development Setup
 

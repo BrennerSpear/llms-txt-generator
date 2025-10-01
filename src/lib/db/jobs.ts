@@ -5,6 +5,7 @@ import type {
   JobStatus,
   JobType,
   Page,
+  PageVersion,
   Prisma,
 } from "@prisma/client"
 import { prisma } from "./client"
@@ -195,6 +196,78 @@ export const jobService = {
         status: "failed",
         finished_at: new Date(),
         stats: { error } as Prisma.InputJsonValue,
+      },
+    })
+  },
+
+  /**
+   * Merge stats with existing stats
+   */
+  async mergeStats(
+    id: string,
+    newStats: Record<string, unknown>,
+  ): Promise<Job> {
+    const job = await prisma.job.findUnique({
+      where: { id },
+      select: { stats: true },
+    })
+
+    const existingStats = (job?.stats as Record<string, unknown>) || {}
+
+    return prisma.job.update({
+      where: { id },
+      data: {
+        stats: {
+          ...existingStats,
+          ...newStats,
+        } as Prisma.InputJsonValue,
+      },
+    })
+  },
+
+  /**
+   * Mark job as completed with final stats
+   */
+  async complete(id: string, stats: Record<string, unknown>): Promise<Job> {
+    const job = await prisma.job.findUnique({
+      where: { id },
+      select: { stats: true },
+    })
+
+    const existingStats = (job?.stats as Record<string, unknown>) || {}
+
+    return prisma.job.update({
+      where: { id },
+      data: {
+        status: "finished",
+        finished_at: new Date(),
+        stats: {
+          ...existingStats,
+          ...stats,
+        } as Prisma.InputJsonValue,
+      },
+    })
+  },
+
+  /**
+   * Get job with full relations for finalization
+   */
+  async getForFinalization(id: string): Promise<
+    | (Job & {
+        domain: Domain
+        pages: Page[]
+        page_versions: PageVersion[]
+        artifacts: Artifact[]
+      })
+    | null
+  > {
+    return prisma.job.findUnique({
+      where: { id },
+      include: {
+        domain: true,
+        pages: true,
+        page_versions: true,
+        artifacts: true,
       },
     })
   },
