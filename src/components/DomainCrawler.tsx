@@ -5,7 +5,6 @@ interface CrawlConfig {
   checkIntervalMinutes: number
   openrouterModel: string
   maxPages: number
-  promptProfileId?: string
 }
 
 export function DomainCrawler() {
@@ -14,7 +13,6 @@ export function DomainCrawler() {
     checkIntervalMinutes: 1440,
     openrouterModel: "openai/gpt-4o-mini",
     maxPages: 10,
-    promptProfileId: undefined,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +59,6 @@ export function DomainCrawler() {
           checkIntervalMinutes: config.checkIntervalMinutes,
           openrouterModel: config.openrouterModel,
           maxPages: config.maxPages,
-          promptProfileId: config.promptProfileId || undefined,
         }),
       })
 
@@ -81,7 +78,6 @@ export function DomainCrawler() {
           checkIntervalMinutes: 1440,
           openrouterModel: "openai/gpt-4o-mini",
           maxPages: 10,
-          promptProfileId: undefined,
         })
       }
     } catch (err) {
@@ -92,9 +88,8 @@ export function DomainCrawler() {
   }
 
   return (
-    <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-md">
-      <h2 className="mb-6 font-bold text-2xl">Domain Crawler</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="w-full">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div>
           <label
             htmlFor="url"
@@ -141,25 +136,6 @@ export function DomainCrawler() {
 
         <div>
           <label
-            htmlFor="openrouterModel"
-            className="mb-1 block font-medium text-gray-700 text-sm"
-          >
-            OpenRouter Model
-          </label>
-          <input
-            type="text"
-            id="openrouterModel"
-            value={config.openrouterModel}
-            onChange={(e) =>
-              setConfig({ ...config, openrouterModel: e.target.value })
-            }
-            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
-          />
-        </div>
-
-        <div>
-          <label
             htmlFor="maxPages"
             className="mb-1 block font-medium text-gray-700 text-sm"
           >
@@ -183,64 +159,55 @@ export function DomainCrawler() {
 
         <div>
           <label
-            htmlFor="promptProfileId"
+            htmlFor="openrouterModel"
             className="mb-1 block font-medium text-gray-700 text-sm"
           >
-            Prompt Profile ID (optional)
+            OpenRouter Model
           </label>
           <input
             type="text"
-            id="promptProfileId"
-            value={config.promptProfileId || ""}
-            onChange={(e) =>
-              setConfig({
-                ...config,
-                promptProfileId: e.target.value || undefined,
-              })
-            }
-            placeholder="Select a prompt profile"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
+            id="openrouterModel"
+            value={config.openrouterModel}
+            readOnly
+            className="w-full cursor-not-allowed rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-gray-500"
+            disabled={true}
           />
-          <p className="mt-1 text-gray-500 text-xs">
-            Leave empty to use default prompt
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3">
+          <p className="text-red-600 text-sm">{error}</p>
+        </div>
+      )}
+
+      {success && (
+        <div className="mt-4 rounded-md border border-green-200 bg-green-50 p-3">
+          <p className="text-green-600 text-sm">
+            Crawl initiated successfully!
+            {success.jobId && (
+              <>
+                {" "}
+                Job ID:{" "}
+                <a
+                  href={`/jobs/${success.jobId}`}
+                  className="font-medium underline"
+                >
+                  {success.jobId}
+                </a>
+              </>
+            )}
           </p>
         </div>
+      )}
 
-        {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3">
-            <p className="text-red-600 text-sm">{error}</p>
-          </div>
-        )}
-
-        {success && (
-          <div className="rounded-md border border-green-200 bg-green-50 p-3">
-            <p className="text-green-600 text-sm">
-              Crawl initiated successfully!
-              {success.jobId && (
-                <>
-                  {" "}
-                  Job ID:{" "}
-                  <a
-                    href={`/jobs/${success.jobId}`}
-                    className="font-medium underline"
-                  >
-                    {success.jobId}
-                  </a>
-                </>
-              )}
-            </p>
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
-        >
-          {isLoading ? "Initiating Crawl..." : "Start Crawl"}
-        </button>
-      </form>
-    </div>
+      <button
+        type="submit"
+        disabled={isLoading}
+        className="mt-4 rounded-md bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
+      >
+        {isLoading ? "Adding Domain..." : "Add Domain"}
+      </button>
+    </form>
   )
 }

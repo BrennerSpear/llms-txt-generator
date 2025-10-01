@@ -188,4 +188,18 @@ export const artifactService = {
       },
     })
   },
+
+  /**
+   * Get latest artifacts for a domain (llms.txt and llms-full.txt)
+   */
+  async getLatestArtifactsForDomain(domainId: string): Promise<{
+    llmsTxt: Artifact | null
+    llmsFullTxt: Artifact | null
+  }> {
+    const [llmsTxt, llmsFullTxt] = await Promise.all([
+      this.getLatestForDomain(domainId, "llms_txt"),
+      this.getLatestForDomain(domainId, "llms_full_txt"),
+    ])
+    return { llmsTxt, llmsFullTxt }
+  },
 }
