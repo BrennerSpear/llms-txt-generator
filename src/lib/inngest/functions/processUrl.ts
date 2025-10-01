@@ -227,53 +227,73 @@ export const processUrl = inngest.createFunction(
       },
     )
 
-    // Step 6: Process content with OpenRouter (for changed/new pages)
-    const processedContent = await step.run(
-      "process-with-openrouter",
-      async () => {
+    // Step 6: Conditional enhancement based on semantic importance score
+    // Only enhance/summarize if score >= 2
+    let processedContent: string | null = null
+
+    if (semanticAnalysis.score >= 2) {
+      processedContent = await step.run(
+        "enhance-content",
+        async () => {
+          console.log(
+            `[processUrl] Step 6: Enhancing content for URL: ${url} (score: ${semanticAnalysis.score})`,
+          )
+
+          // Enhance with OpenRouter using domain-specific settings
+          const systemPrompt =
+            domainInfo.prompt_profile?.summary_prompt || undefined
+          const model = domainInfo.openrouter_model || "openai/gpt-4o-mini"
+
+          console.log(`[processUrl] Using model: ${model}`)
+          console.log(`[processUrl] Has custom prompt: ${!!systemPrompt}`)
+
+          // Use OpenRouter to process the content
+          console.log("[processUrl] Calling OpenRouter.processPageContent...")
+          const enhanced = await openRouter.processPageContent(
+            cleanedContent,
+            systemPrompt,
+            model,
+          )
+          console.log("[processUrl] OpenRouter processing complete")
+
+          return enhanced
+        },
+      )
+    } else {
+      // Score = 1: Skip expensive enhancement
+      await step.run("skip-enhancement", async () => {
         console.log(
-          `[processUrl] Step 6: Starting OpenRouter processing for URL: ${url}`,
+          `⏭️  Skipping content enhancement for ${url} (importance score: ${semanticAnalysis.score})`,
         )
+      })
+    }
 
-        // Then enhance with OpenRouter using domain-specific settings
-        const systemPrompt =
-          domainInfo.prompt_profile?.summary_prompt || undefined
-        const model = domainInfo.openrouter_model || "openai/gpt-4o-mini"
-
-        console.log(`[processUrl] Using model: ${model}`)
-        console.log(`[processUrl] Has custom prompt: ${!!systemPrompt}`)
-
-        // Use OpenRouter to process the content - no fallback
-        console.log("[processUrl] Calling OpenRouter.processPageContent...")
-        const enhanced = await openRouter.processPageContent(
-          cleanedContent,
-          systemPrompt,
-          model,
-        )
-        console.log("[processUrl] OpenRouter processing complete")
-
-        return enhanced
-      },
-    )
-
-    // Step 7: Store cleaned/processed content to storage
-    const storagePaths = await step.run("store-processed-content", async () => {
-      // Store OpenRouter-processed markdown
+    // Step 7: Store content to storage
+    const storagePaths = await step.run("store-content", async () => {
       const processedPath = getProcessedPagePath(
         domainUrl,
         jobId,
         new Date(job.started_at),
         url,
       )
+
+      // If we enhanced the content (score >= 2), store the enhanced version
+      // Otherwise, store the cleaned content
+      const contentToStore = processedContent ?? cleanedContent
+
       await storage.upload(
         STORAGE_BUCKETS.ARTIFACTS,
         processedPath,
-        processedContent,
+        contentToStore,
+      )
+
+      console.log(
+        `[processUrl] Stored ${processedContent ? "enhanced" : "cleaned"} content to: ${processedPath}`,
       )
 
       return {
         rawPath: rawMdPath, // Path to raw markdown from Firecrawl (already stored by handleCrawlPage)
-        processedPath, // Path to OpenRouter-processed markdown
+        processedPath, // Path to enhanced or cleaned markdown
       }
     })
 
@@ -299,7 +319,12 @@ export const processUrl = inngest.createFunction(
     // Step 10: Increment pages processed counter
     const updatedJob = await step.run("increment-pages-processed", async () => {
       const job = await db.job.incrementPagesProcessed(jobId)
-      console.log(`   ✅ Processed page: ${url}`)
+      const enhancementStatus = processedContent
+        ? "enhanced"
+        : "cleaned only (score 1)"
+      console.log(
+        `   ✅ Processed page (${enhancementStatus}): ${url} (score: ${semanticAnalysis.score})`,
+      )
       console.log(
         `   📊 Processed: ${job.pages_processed} / Received: ${job.pages_received}`,
       )
