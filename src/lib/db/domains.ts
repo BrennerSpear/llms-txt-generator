@@ -75,6 +75,53 @@ export const domainService = {
   },
 
   /**
+   * Get domain with pages and their latest versions
+   */
+  async getWithPages(id: string): Promise<
+    | (Domain & {
+        prompt_profile: PromptProfile | null
+        _count: {
+          pages: number
+          jobs: number
+        }
+        pages: Array<{
+          id: string
+          url: string
+          created_at: Date
+          page_versions: Array<{
+            id: string
+            created_at: Date
+            raw_md_blob_url: string | null
+            html_md_blob_url: string | null
+          }>
+        }>
+      })
+    | null
+  > {
+    return prisma.domain.findUnique({
+      where: { id },
+      include: {
+        prompt_profile: true,
+        _count: {
+          select: {
+            pages: true,
+            jobs: true,
+          },
+        },
+        pages: {
+          include: {
+            page_versions: {
+              orderBy: { created_at: "desc" },
+              take: 1,
+            },
+          },
+          orderBy: { url: "asc" },
+        },
+      },
+    })
+  },
+
+  /**
    * Get a domain by URL with prompt profile
    */
   async getByDomain(domain: string): Promise<
