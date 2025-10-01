@@ -1,4 +1,5 @@
 import type { Domain, Job, PromptProfile } from "@prisma/client"
+import { DEFAULT_MODEL } from "../openrouter/types"
 import { prisma } from "./client"
 
 export const domainService = {
@@ -16,7 +17,7 @@ export const domainService = {
       data: {
         domain: data.domain,
         check_interval_minutes: data.checkIntervalMinutes ?? 1440,
-        openrouter_model: data.openrouterModel ?? "openai/gpt-4o-mini",
+        openrouter_model: data.openrouterModel ?? DEFAULT_MODEL,
         prompt_profile_id: data.promptProfileId,
         is_active: data.isActive ?? true,
       },
@@ -48,7 +49,7 @@ export const domainService = {
       data: {
         domain: data.domain,
         check_interval_minutes: data.checkIntervalMinutes ?? 1440,
-        openrouter_model: data.openrouterModel ?? "openai/gpt-4o-mini",
+        openrouter_model: data.openrouterModel ?? DEFAULT_MODEL,
         prompt_profile_id: data.promptProfileId,
         is_active: data.isActive ?? true,
       },
@@ -93,6 +94,9 @@ export const domainService = {
             created_at: Date
             raw_md_blob_url: string | null
             html_md_blob_url: string | null
+            page_title: string | null
+            page_description: string | null
+            page_summary: string | null
           }>
         }>
       })
@@ -111,6 +115,15 @@ export const domainService = {
         pages: {
           include: {
             page_versions: {
+              select: {
+                id: true,
+                created_at: true,
+                raw_md_blob_url: true,
+                html_md_blob_url: true,
+                page_title: true,
+                page_description: true,
+                page_summary: true,
+              },
               orderBy: { created_at: "desc" },
               take: 1,
             },

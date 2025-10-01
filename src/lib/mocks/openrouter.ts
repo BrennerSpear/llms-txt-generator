@@ -8,6 +8,7 @@ import type {
   ChatCompletionCreateParams,
   ChatCompletionMessage,
 } from "openai/resources/chat/completions"
+import { DEFAULT_MODEL } from "../openrouter/types"
 
 // Re-export types for convenience
 export type OpenRouterMessage = ChatCompletionMessage
@@ -305,7 +306,7 @@ export class MockOpenRouterClient {
   async processPageContent(
     content: string,
     systemPrompt?: string,
-    model = "openai/gpt-4o-mini",
+    model: string = DEFAULT_MODEL,
   ): Promise<string> {
     // Simulate processing delay
     await new Promise((resolve) => setTimeout(resolve, 500))

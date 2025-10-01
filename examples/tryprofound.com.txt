@@ -1,0 +1,45 @@
+# Profound
+
+> AI search optimization platform for enterprise brands
+
+## What is Profound?
+
+Profound is an AI search optimization platform that helps enterprise brands improve their visibility across AI search engines like ChatGPT, Perplexity, Google AI Overviews, and others. The platform enables brands to reach millions of consumers who are using AI to discover new products and brands.
+
+## Key Features
+
+### Answer Engine Insights
+Track how AI search engines mention your brand across different queries and conversations.
+
+### Workflows
+Create AI-optimized content quickly with automated tools designed for AI search visibility.
+
+### Prompt Volumes
+Analyze AI search trends to understand what users are asking AI engines about your industry.
+
+### Agent Analytics
+Monitor and understand how AI crawlers access your content to optimize for better AI visibility.
+
+### Shopping Visibility
+Optimize product placement and visibility in AI-powered shopping results.
+
+## Target Audience
+
+- Enterprise brands seeking AI search presence
+- Marketing and PR agencies
+- Companies wanting to increase visibility in AI-powered search
+
+## Enterprise Capabilities
+
+- SOC 2 Type II compliant
+- Single sign-on (SSO) support
+- Premium support options
+- Daily automated backups
+
+## Notable Clients
+
+MongoDB, Indeed, Ramp, Zapier, DocuSign, US Bank
+
+## Getting Started
+
+Visit https://tryprofound.com to get a demo or get started with customized enterprise pricing.

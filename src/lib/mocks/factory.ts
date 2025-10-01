@@ -1,3 +1,5 @@
+import { DEFAULT_MODEL } from "../openrouter/types"
+
 /**
  * Mock data factory for generating realistic test data
  */
@@ -532,7 +534,7 @@ export function generateMockDomain(overrides?: Record<string, unknown>) {
     id: `domain_${Math.random().toString(36).slice(2)}`,
     domain: "example.com",
     check_interval_minutes: 1440,
-    openrouter_model: "openai/gpt-4o-mini",
+    openrouter_model: DEFAULT_MODEL,
     firecrawl_llms_txt_url: null,
     prompt_profile_id: null,
     is_active: true,

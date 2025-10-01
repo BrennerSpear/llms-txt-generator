@@ -16,7 +16,7 @@ export function DomainCrawler({ onDomainAdded }: DomainCrawlerProps = {}) {
   const [url, setUrl] = useState("")
   const [config, setConfig] = useState<CrawlConfig>({
     checkIntervalMinutes: 1440,
-    openrouterModel: "openai/gpt-4o-mini",
+    openrouterModel: "openai/gpt-5",
     maxPages: 10,
   })
   const [isLoading, setIsLoading] = useState(false)
@@ -86,7 +86,7 @@ export function DomainCrawler({ onDomainAdded }: DomainCrawlerProps = {}) {
         setUrl("")
         setConfig({
           checkIntervalMinutes: 1440,
-          openrouterModel: "openai/gpt-4o-mini",
+          openrouterModel: "openai/gpt-5",
           maxPages: 10,
         })
         // Trigger refresh of domains table

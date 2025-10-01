@@ -10,6 +10,7 @@ import type {
 } from "openai/resources/chat/completions"
 import { env } from "~/env"
 import { mockOpenRouter } from "../mocks/openrouter"
+import { DEFAULT_MODEL, type OpenRouterModel } from "./types"
 
 // Re-export types for convenience
 export type OpenRouterRequest = ChatCompletionCreateParams
@@ -20,8 +21,13 @@ export type OpenRouterResponse = ChatCompletion
  */
 export class OpenRouterClient {
   private client: OpenAI
+  private defaultModel: string
 
-  constructor(apiKey?: string, baseURL?: string) {
+  constructor(
+    apiKey?: string,
+    baseURL?: string,
+    defaultModel: string = DEFAULT_MODEL,
+  ) {
     this.client = new OpenAI({
       apiKey: apiKey ?? env.OPENROUTER_API_KEY,
       baseURL: baseURL ?? "https://openrouter.ai/api/v1",
@@ -31,6 +37,7 @@ export class OpenRouterClient {
         // "X-Title": "llms-txt-generator"
       },
     })
+    this.defaultModel = defaultModel
   }
 
   /**
@@ -71,7 +78,7 @@ export class OpenRouterClient {
   async processPageContent(
     content: string,
     systemPrompt?: string,
-    model = "openai/gpt-4o-mini",
+    model: string = this.defaultModel,
   ): Promise<string> {
     console.log("[OpenRouter REAL Client] processPageContent called")
     console.log(`[OpenRouter REAL Client] Model: ${model}`)
@@ -129,7 +136,7 @@ Return only the processed markdown content without any additional commentary.`
    */
   async evaluateChangeImportance(
     contentDiff: string,
-    model = "openai/gpt-4o-mini",
+    model: string = this.defaultModel,
   ): Promise<number> {
     const systemPrompt = `You are a content change analyzer. Evaluate the semantic importance of changes shown in a git-style diff.
 
@@ -180,7 +187,7 @@ Return ONLY a single integer (1, 2, 3, or 4). No explanation.`
   async summarizeContent(
     content: string,
     maxLength = 500,
-    model = "openai/gpt-4o-mini",
+    model: string = this.defaultModel,
   ): Promise<string> {
     const response = await this.createChatCompletion({
       model,
@@ -209,7 +216,7 @@ Return ONLY a single integer (1, 2, 3, or 4). No explanation.`
   async extractStructuredData<T = any>(
     content: string,
     schema: string,
-    model = "openai/gpt-4o-mini",
+    model: string = this.defaultModel,
   ): Promise<T> {
     const response = await this.createChatCompletion({
       model,
@@ -250,7 +257,7 @@ Return ONLY a single integer (1, 2, 3, or 4). No explanation.`
       description?: string
       [key: string]: unknown
     },
-    model = "openai/gpt-4o-mini",
+    model: OpenRouterModel | string = this.defaultModel,
   ): Promise<{ description: string; summary: string }> {
     const prompt = `Analyze this page content and provide:
 1. A one-line description (50-100 characters) that captures the essence of the page
@@ -356,7 +363,7 @@ class OpenRouterClientWrapper {
   async processPageContent(
     content: string,
     systemPrompt?: string,
-    model = "openai/gpt-4o-mini",
+    model: string = DEFAULT_MODEL,
   ): Promise<string> {
     console.log(`[OpenRouter] processPageContent called with model: ${model}`)
     console.log(`[OpenRouter] Using ${this.useMock ? "MOCK" : "REAL"} client`)
@@ -379,7 +386,7 @@ class OpenRouterClientWrapper {
    */
   async evaluateChangeImportance(
     contentDiff: string,
-    model = "openai/gpt-4o-mini",
+    model: string = DEFAULT_MODEL,
   ): Promise<number> {
     console.log(
       `[OpenRouter] evaluateChangeImportance called with model: ${model}`,
@@ -401,7 +408,7 @@ class OpenRouterClientWrapper {
   async summarizeContent(
     content: string,
     maxLength = 500,
-    model = "openai/gpt-4o-mini",
+    model: string = DEFAULT_MODEL,
   ): Promise<string> {
     if ("summarizeContent" in this.client) {
       return await this.client.summarizeContent(content, maxLength, model)
@@ -418,7 +425,7 @@ class OpenRouterClientWrapper {
   async extractStructuredData<T = any>(
     content: string,
     schema: string,
-    model = "openai/gpt-4o-mini",
+    model: string = DEFAULT_MODEL,
   ): Promise<T> {
     if ("extractStructuredData" in this.client) {
       return await this.client.extractStructuredData(content, schema, model)
@@ -437,7 +444,7 @@ class OpenRouterClientWrapper {
       description?: string
       [key: string]: unknown
     },
-    model = "openai/gpt-4o-mini",
+    model: string = DEFAULT_MODEL,
   ): Promise<{ description: string; summary: string }> {
     if ("generatePageSummary" in this.client) {
       return await this.client.generatePageSummary(content, metadata, model)

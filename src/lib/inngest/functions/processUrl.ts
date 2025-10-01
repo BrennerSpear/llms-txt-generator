@@ -1,5 +1,6 @@
 import { db } from "~/lib/db"
 import { openRouter } from "~/lib/openrouter/client"
+import { DEFAULT_MODEL } from "~/lib/openrouter/types"
 import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
 import { getProcessedPagePath } from "~/lib/storage/paths"
 import { cleanContent, extractTitleFromContent } from "~/lib/utils/cleaning"
@@ -128,7 +129,7 @@ export const processUrl = inngest.createFunction(
         `[processUrl] Step 4: Generating page summary for URL: ${url}`,
       )
 
-      const model = domainInfo.openrouter_model || "openai/gpt-4o-mini"
+      const model = domainInfo.openrouter_model || DEFAULT_MODEL
       const summaryData = await openRouter.generatePageSummary(
         cleanedContent,
         metadata,
@@ -247,7 +248,7 @@ export const processUrl = inngest.createFunction(
         }
 
         // Use OpenRouter to evaluate the semantic importance
-        const model = "openai/gpt-4o-mini"
+        const model = DEFAULT_MODEL
         console.log(`[processUrl] Evaluating changes with model: ${model}`)
 
         const score = await openRouter.evaluateChangeImportance(
@@ -273,7 +274,7 @@ export const processUrl = inngest.createFunction(
         // Enhance with OpenRouter using domain-specific settings
         const systemPrompt =
           domainInfo.prompt_profile?.summary_prompt || undefined
-        const model = domainInfo.openrouter_model || "openai/gpt-4o-mini"
+        const model = domainInfo.openrouter_model || DEFAULT_MODEL
 
         console.log(`[processUrl] Using model: ${model}`)
         console.log(`[processUrl] Has custom prompt: ${!!systemPrompt}`)

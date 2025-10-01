@@ -22,6 +22,7 @@ export type {
  */
 export const OPENROUTER_MODELS = {
   // OpenAI Models
+  GPT_5: "openai/gpt-5",
   GPT_4O: "openai/gpt-4o",
   GPT_4O_MINI: "openai/gpt-4o-mini",
   GPT_4_TURBO: "openai/gpt-4-turbo",
@@ -56,6 +57,11 @@ export const OPENROUTER_MODELS = {
 
 export type OpenRouterModel =
   (typeof OPENROUTER_MODELS)[keyof typeof OPENROUTER_MODELS]
+
+/**
+ * Default model for OpenRouter client
+ */
+export const DEFAULT_MODEL = OPENROUTER_MODELS.GPT_5
 
 /**
  * OpenRouter API error response
