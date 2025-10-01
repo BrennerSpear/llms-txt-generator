@@ -9,6 +9,7 @@ type DomainIngestRequested = {
     type: "initial" | "update"
     requestedBy?: string
     scheduledAt?: string
+    maxPages?: number
   }
 }
 

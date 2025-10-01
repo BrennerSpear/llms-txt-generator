@@ -1,5 +1,6 @@
 import type {
   CrawlJob,
+  CrawlOptions,
   CrawlResponse,
   Document,
   DocumentMetadata,
@@ -31,25 +32,11 @@ const mockCrawlJobs = new Map<
  */
 export async function mockStartCrawl(
   url: string,
-  options?: {
-    scrapeOptions?: {
-      formats?: unknown[]
-      proxy?: string
-      maxAge?: number
-      [key: string]: unknown
-    }
-    webhook?: {
-      url: string
-      events?: string[]
-    }
-    maxPages?: number
-    limit?: number
-    [key: string]: unknown
-  },
+  options?: CrawlOptions,
 ): Promise<CrawlResponse> {
   const domain = new URL(url).hostname
   const jobId = `mock_crawl_${Date.now()}_${Math.random().toString(36).slice(2)}`
-  const maxPages = options?.limit ?? options?.maxPages ?? 10
+  const maxPages = options?.limit ?? 10
 
   // Generate mock pages for this domain
   const pages = generateMockPagesForDomain(domain, maxPages)
@@ -65,14 +52,17 @@ export async function mockStartCrawl(
   })
 
   // If webhook URL is provided, simulate sending webhook events asynchronously
-  if (options?.webhook?.url) {
-    console.log(
-      `📮 Mock Firecrawl: Scheduling webhooks to ${options.webhook.url}`,
-    )
+  const webhookUrl =
+    typeof options?.webhook === "string"
+      ? options.webhook
+      : options?.webhook?.url
+
+  if (webhookUrl) {
+    console.log(`📮 Mock Firecrawl: Scheduling webhooks to ${webhookUrl}`)
     console.log(`   Job ID: ${jobId}`)
     console.log(`   Pages to send: ${pages.length}`)
     // Schedule mock webhook events - this happens in background
-    scheduleMockWebhooks(jobId, options.webhook.url, pages)
+    scheduleMockWebhooks(jobId, webhookUrl, pages)
   } else {
     console.log(
       "⚠️ Mock Firecrawl: No webhook URL provided, skipping webhook simulation",
@@ -318,45 +308,14 @@ export class MockFirecrawlClient {
 
   async startCrawl(
     url: string,
-    options?: {
-      scrapeOptions?: {
-        formats?: unknown[]
-        proxy?: string
-        maxAge?: number
-        [key: string]: unknown
-      }
-      webhook?: {
-        url: string
-        events?: string[]
-      }
-      maxPages?: number
-      limit?: number
-      [key: string]: unknown
-    },
+    options?: CrawlOptions,
   ): Promise<CrawlResponse> {
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 100))
     return mockStartCrawl(url, options)
   }
 
-  async crawl(
-    url: string,
-    options?: {
-      scrapeOptions?: {
-        formats?: unknown[]
-        proxy?: string
-        maxAge?: number
-        [key: string]: unknown
-      }
-      webhook?: {
-        url: string
-        events?: string[]
-      }
-      maxPages?: number
-      limit?: number
-      [key: string]: unknown
-    },
-  ): Promise<CrawlJob> {
+  async crawl(url: string, options?: CrawlOptions): Promise<CrawlJob> {
     // For the synchronous crawl method, start the crawl then wait for completion
     const crawlResponse = await this.startCrawl(url, options)
 

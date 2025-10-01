@@ -2,7 +2,6 @@ import type { Job } from "@prisma/client"
 import { env } from "~/env"
 import { db } from "~/lib/db"
 import { startDomainCrawl } from "~/lib/firecrawl/client"
-import { mockFirecrawl } from "~/lib/mocks/firecrawl"
 import { NonRetriableError, inngest, sendEvent } from "../client"
 
 /**
@@ -21,7 +20,7 @@ export const startCrawl = inngest.createFunction(
   },
   { event: "domain/ingest.requested" },
   async ({ event, step }) => {
-    const { domainId, type } = event.data
+    const { domainId, type, maxPages } = event.data
 
     // Step 1: Validate domain and check for active jobs
     const validation = await step.run("validate-domain", async () => {
@@ -54,58 +53,20 @@ export const startCrawl = inngest.createFunction(
       })
     })
 
-    // Step 3: Start crawl with Firecrawl (or mock)
+    // Step 3: Start crawl with Firecrawl
     const crawlResult = await step.run("initiate-crawl", async () => {
       const domain = validation.domain
       const webhookUrl = `${env.FIRECRAWL_WEBHOOK_URL}/api/webhooks/firecrawl`
 
-      // Use mock service in development or when flag is set
-      const useMock =
-        env.USE_MOCK_SERVICES ?? process.env.NODE_ENV === "development"
+      const result = await startDomainCrawl(
+        `https://${domain.domain}`,
+        domain.check_interval_minutes,
+        webhookUrl,
+        maxPages ?? 10, // Default to 10 pages if not specified
+      )
 
-      if (useMock) {
-        console.log(`🎭 Using mock Firecrawl for domain: ${domain.domain}`)
-
-        // Start mock crawl using same options format as real Firecrawl
-        const result = await mockFirecrawl.startCrawl(
-          `https://${domain.domain}`,
-          {
-            scrapeOptions: {
-              formats: [
-                "markdown",
-                {
-                  type: "changeTracking",
-                  modes: ["git-diff"],
-                  tag: process.env.NODE_ENV ?? "production",
-                },
-              ],
-              proxy: "auto",
-              maxAge: Math.max(0, domain.check_interval_minutes * 60_000),
-            },
-            webhook: {
-              url: webhookUrl,
-              events: ["page", "completed"],
-            },
-          },
-        )
-
-        return {
-          firecrawlJobId: result.id,
-          isMock: true,
-        }
-        // biome-ignore lint/style/noUselessElse: cleaner
-      } else {
-        // Use real Firecrawl with optimized settings
-        const result = await startDomainCrawl(
-          `https://${domain.domain}`,
-          domain.check_interval_minutes, // TODO need to make sure this matches up with the page's (now() - last crawl time + interval = maxAge)
-          webhookUrl,
-        )
-
-        return {
-          firecrawlJobId: result.id,
-          isMock: false,
-        }
+      return {
+        firecrawlJobId: result.id,
       }
     })
 
@@ -122,7 +83,6 @@ export const startCrawl = inngest.createFunction(
       domainId,
       firecrawlJobId: crawlResult.firecrawlJobId,
       type,
-      isMock: crawlResult.isMock,
     }
   },
 )

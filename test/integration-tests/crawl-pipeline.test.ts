@@ -12,10 +12,16 @@
  * Run with: npx tsx test/integration-tests/crawl-pipeline.test.ts
  */
 
+import { resolve } from "node:path"
+import { config } from "dotenv"
+
+// Load environment variables from .env file
+config({ path: resolve(process.cwd(), ".env") })
+
 import { runCrawlPipelineTest } from "./crawl-pipeline.base"
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:3000"
-const TEST_DOMAIN = `test.integration.real.${Date.now()}.com`
+const TEST_DOMAIN = "adidas.com"
 
 // Verify required API keys
 if (!process.env.FIRECRAWL_API_KEY) {
