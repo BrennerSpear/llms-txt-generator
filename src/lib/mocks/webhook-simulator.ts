@@ -9,7 +9,7 @@ export interface WebhookEvent {
   type: "crawl.started" | "crawl.page" | "crawl.completed" | "crawl.failed"
   jobId: string
   timestamp: string
-  data: Document | Record<string, unknown>
+  data: Document[] | Document | Record<string, unknown>
 }
 
 /**
@@ -84,18 +84,20 @@ export class WebhookSimulator {
 
       sentPages.push(page)
 
-      // Send crawl.page event with change tracking
+      // Send crawl.page event with change tracking (data should be an array)
       await this.sendWebhookEvent({
         type: "crawl.page",
         jobId,
         timestamp: new Date().toISOString(),
-        data: {
-          ...page,
-          changeTracking: {
-            hasChanges: true, // Assume all provided pages have changes
-            tag: "test",
+        data: [
+          {
+            ...page,
+            changeTracking: {
+              hasChanges: true, // Assume all provided pages have changes
+              tag: "test",
+            },
           },
-        },
+        ],
       })
 
       console.log(`📄 Sent custom page ${i + 1}/${pages.length}: ${pageUrl}`)
@@ -208,12 +210,12 @@ export class WebhookSimulator {
 
       pages.push(page)
 
-      // Send crawl.page event
+      // Send crawl.page event (data should be an array for crawl.page events)
       await this.sendWebhookEvent({
         type: "crawl.page",
         jobId,
         timestamp: new Date().toISOString(),
-        data: page,
+        data: [page], // Wrap in array as expected by webhook handler
       })
 
       console.log(`📄 Simulated page ${i + 1}/${pageCount}: ${pageUrl}`)
@@ -244,8 +246,12 @@ export class WebhookSimulator {
    * Send a single webhook event
    */
   async sendWebhookEvent(event: WebhookEvent) {
+    // Format payload to match Firecrawl webhook structure
     const payload = {
-      ...event,
+      type: event.type,
+      id: event.jobId, // Firecrawl uses 'id' for job ID
+      data: event.data,
+      timestamp: event.timestamp,
       source: "webhook-simulator",
     }
 

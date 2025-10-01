@@ -129,13 +129,18 @@ Be concise but informative.`
    * Categorize pages into logical groups
    */
   async categorizePages(
-    pages: Array<{ url: string; title?: string; summary?: string }>,
+    pages: Array<{
+      url: string
+      title: string
+      description: string
+      summary?: string
+    }>,
   ): Promise<Record<string, typeof pages>> {
     const systemPrompt = `You are organizing website pages into logical categories for documentation.
 Group pages based on their purpose and content type.`
 
     const userPrompt = `Categorize these pages into logical groups:
-${pages.map((p) => `- ${p.url}${p.title ? ` (${p.title})` : ""}`).join("\n")}
+${pages.map((p) => `- ${p.url} (${p.title})`).join("\n")}
 
 Return a JSON object where keys are category names and values are arrays of URLs.
 Use categories like: "Documentation", "API Reference", "Features", "Getting Started", "About", "Legal", etc.
@@ -217,92 +222,88 @@ Example format:
   }
 
   /**
-   * Generate the complete llms.txt content
+   * Generate the complete llms.txt content using structured format
    */
   async generateLlmsTxt(
     domain: string,
     pages: Array<{
       url: string
+      title: string
+      description: string
+      summary?: string
       content: string
-      title?: string
     }>,
   ): Promise<string> {
     // Generate site overview
     const overview = await this.generateSiteOverview(domain, pages)
 
-    // Process and summarize each page
-    const pagesWithSummaries = await Promise.all(
-      pages.map(async (page) => {
-        const summary = await this.summarizePage(page.url, page.content)
-        const depth = page.url.split("/").length - 3 // Approximate depth
-        const score = await this.scorePage(page.url, page.content, depth)
+    // Build context about all pages for the AI
+    const pagesContext = pages
+      .map(
+        (p) => `
+- Title: ${p.title}
+  URL: ${p.url}
+  Description: ${p.description}
+  ${p.summary ? `Summary: ${p.summary}` : ""}`,
+      )
+      .join("\n")
 
-        return {
-          ...page,
-          summary,
-          score,
-        }
-      }),
-    )
+    // Create the structured prompt for formatting the entire site
+    const llmsTxtPrompt = `Format the following website content according to the llms.txt specification.
 
-    // Sort by score (importance)
-    pagesWithSummaries.sort((a, b) => b.score - a.score)
+Domain: ${domain}
 
-    // Categorize pages
-    const categories = await this.categorizePages(pagesWithSummaries)
+Site Overview:
+${overview}
 
-    // Build the llms.txt content
-    const sections: string[] = []
+All pages on this site:
+${pagesContext}
 
-    // Header
-    sections.push(`# ${domain}`)
-    sections.push("")
-    sections.push(overview)
-    sections.push("")
-    sections.push("---")
-    sections.push("")
+Output format requirements:
+1. Start with main title using # (domain name)
+2. Add site description using > quote syntax
+3. Include relevant details about the site in plain text
+4. Create ## sections for major topics/categories
+5. Use - [Link title](url) format for links with brief descriptions
+6. Add an optional "## Optional" section at the end for less critical pages
 
-    // Table of contents
-    if (Object.keys(categories).length > 1) {
-      sections.push("## Contents")
-      sections.push("")
-      for (const category of Object.keys(categories)) {
-        sections.push(
-          `- [${category}](#${category.toLowerCase().replace(/\s+/g, "-")})`,
-        )
-      }
-      sections.push("")
-      sections.push("---")
-      sections.push("")
-    }
+Example format:
+# ${domain}
 
-    // Category sections
-    for (const [category, categoryPages] of Object.entries(categories)) {
-      if (categoryPages.length === 0) continue
+> One-line site description goes here
 
-      sections.push(`## ${category}`)
-      sections.push("")
+Key details and context about the site.
 
-      for (const page of categoryPages) {
-        const pagePath = page.url.replace(/^https?:\/\/[^\/]+/, "")
-        sections.push(`### ${page.title || pagePath}`)
-        sections.push(`**URL:** ${page.url}`)
-        sections.push("")
-        if (page.summary) {
-          sections.push(page.summary)
-          sections.push("")
-        }
-      }
+## Main Section
 
-      sections.push("---")
-      sections.push("")
-    }
+- [Page Title](https://example.com/page): Brief description of this page
+- [Another Page](https://example.com/other): Description of what this page contains
 
-    // Footer
-    sections.push(`Generated: ${new Date().toISOString()}`)
-    sections.push(`Total pages processed: ${pages.length}`)
+## Optional
 
-    return sections.join("\n")
+- [Additional Resource](https://example.com/resource): Less critical content
+
+Generate the llms.txt content following this exact structure. Be concise but informative.
+Organize pages into logical sections based on their purpose and content.`
+
+    const response = await this.makeRequest({
+      model: "openai/gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert at creating llms.txt files - structured documentation optimized for LLM consumption. Format content clearly and concisely.",
+        },
+        {
+          role: "user",
+          content: llmsTxtPrompt,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 4000,
+    })
+
+    return response.choices[0]?.message.content || ""
   }
 }
 

@@ -37,20 +37,13 @@ This document outlines all frontend components needed for the llms.txt generator
 - Pages scanned count
 - Last crawl date
 - Check interval
-- OpenRouter model
+<!-- - OpenRouter model -->
 - Actions:
   - View `llms.txt` (web preview)
   - Download `llms.txt`
   - View `llms-full.txt` (web preview)
   - Download `llms-full.txt`
   - Trigger new crawl
-  - Edit settings
-
-**Features**:
-- Sortable columns
-- Search/filter by domain
-- Pagination
-- Bulk actions (activate/deactivate domains)
 
 **APIs**:
 - `GET /api/domains` (to be created)
@@ -75,13 +68,6 @@ This document outlines all frontend components needed for the llms.txt generator
   - Actions:
     - View raw markdown (`raw_md_blob_url`)
     - View processed HTML markdown (`html_md_blob_url`)
-    - Version history modal
-
-- **Version History Modal**:
-  - List of all versions for a page
-  - Fingerprint comparison
-  - Similarity scores between versions
-  - Diff viewer for content changes
 
 **APIs**:
 - `GET /api/domains/[domainId]` (to be created)
