@@ -157,6 +157,38 @@ export function removeRedundantMetadata(content: string): string {
 }
 
 /**
+ * Extract title from markdown content
+ * Looks for the first H1 heading, or falls back to first heading or first line
+ */
+export function extractTitleFromContent(content: string): string {
+  const lines = content.split("\n")
+
+  // First, look for an H1 heading
+  for (const line of lines) {
+    if (line.startsWith("# ")) {
+      return line.substring(2).trim()
+    }
+  }
+
+  // Then look for any heading
+  for (const line of lines) {
+    if (line.match(/^#{1,6}\s+/)) {
+      return line.replace(/^#{1,6}\s+/, "").trim()
+    }
+  }
+
+  // Fall back to first non-empty line (up to 100 chars)
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (trimmed.length > 0) {
+      return trimmed.substring(0, 100)
+    }
+  }
+
+  return "Untitled Page"
+}
+
+/**
  * Main cleaning pipeline
  */
 export function cleanContent(

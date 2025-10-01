@@ -92,6 +92,9 @@ export const pageService = {
     changeStatus?: string
     reason?: string
     semanticImportance?: number | null
+    pageTitle?: string
+    pageDescription?: string
+    pageSummary?: string
   }): Promise<PageVersion> {
     return prisma.pageVersion.create({
       data: {
@@ -103,6 +106,9 @@ export const pageService = {
         change_status: data.changeStatus,
         reason: data.reason,
         semantic_importance: data.semanticImportance,
+        page_title: data.pageTitle,
+        page_description: data.pageDescription,
+        page_summary: data.pageSummary,
       },
     })
   },
@@ -228,6 +234,9 @@ export const pageService = {
       changeStatus?: string
       reason?: string
       semanticImportance?: number | null
+      pageTitle?: string
+      pageDescription?: string
+      pageSummary?: string
     }>,
   ): Promise<Prisma.BatchPayload> {
     return prisma.pageVersion.createMany({
@@ -240,6 +249,9 @@ export const pageService = {
         change_status: v.changeStatus,
         reason: v.reason,
         semantic_importance: v.semanticImportance,
+        page_title: v.pageTitle,
+        page_description: v.pageDescription,
+        page_summary: v.pageSummary,
       })),
     })
   },

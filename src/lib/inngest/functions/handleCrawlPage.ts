@@ -125,6 +125,13 @@ export const handleCrawlPage = inngest.createFunction(
         rawContent: markdown,
         rawMdPath, // Pass the path where raw markdown was stored
         changeTracking,
+        metadata: metadata
+          ? {
+              title: metadata?.title,
+              description: metadata?.description,
+              ...metadata,
+            }
+          : undefined,
       })
     })
 

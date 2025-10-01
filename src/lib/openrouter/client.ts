@@ -118,6 +118,63 @@ Return only the processed markdown content without any additional commentary.`
   }
 
   /**
+   * Evaluate semantic importance of content changes
+   * Returns a score from 1-4:
+   * 1 = Minor/insignificant (typos, formatting, dates)
+   * 2 = Moderate (small content updates, minor corrections)
+   * 3 = Significant (new information, meaningful updates)
+   * 4 = Major (substantial content changes, new features/sections)
+   *
+   * NOTE / TODO We should be using structured output here.
+   */
+  async evaluateChangeImportance(
+    contentDiff: string,
+    model = "openai/gpt-4o-mini",
+  ): Promise<number> {
+    const systemPrompt = `You are a content change analyzer. Evaluate the semantic importance of changes shown in a git-style diff.
+
+Score the changes on a scale of 1-4:
+- 1: Minor/insignificant (typos, whitespace, formatting, date updates, trivial wording)
+- 2: Moderate (small content updates, minor corrections, updated examples)
+- 3: Significant (new information, meaningful content updates, structural changes)
+- 4: Major (substantial new content, new features/sections, fundamental changes)
+
+Consider:
+- Volume of changes
+- Type of changes (factual updates vs formatting)
+- Impact on documentation meaning
+- Value for users/LLMs consuming this content
+
+Return ONLY a single integer (1, 2, 3, or 4). No explanation.`
+
+    const response = await this.createChatCompletion({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `Evaluate these changes:\n\n${contentDiff}`,
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 10,
+    })
+
+    const scoreText = response.choices[0]?.message?.content?.trim() ?? "2"
+    const score = Number.parseInt(scoreText, 10)
+
+    // Validate and clamp to 1-4 range
+    if (Number.isNaN(score) || score < 1 || score > 4) {
+      console.warn(
+        `Invalid change importance score: ${scoreText}, defaulting to 2`,
+      )
+      return 2
+    }
+
+    return score
+  }
+
+  /**
    * Summarize page content
    */
   async summarizeContent(
@@ -179,6 +236,80 @@ Return only the processed markdown content without any additional commentary.`
       return JSON.parse(result) as T
     } catch (error) {
       throw new Error(`Failed to parse OpenRouter response as JSON: ${error}`)
+    }
+  }
+
+  /**
+   * Generate page summary with structured output
+   * Returns description (always) and summary (if enough content)
+   */
+  async generatePageSummary(
+    content: string,
+    metadata?: {
+      title?: string
+      description?: string
+      [key: string]: unknown
+    },
+    model = "openai/gpt-4o-mini",
+  ): Promise<{ description: string; summary: string }> {
+    const prompt = `Analyze this page content and provide:
+1. A one-line description (50-100 characters) that captures the essence of the page
+2. If there's substantial content, a one-paragraph summary (200-500 characters)
+
+${metadata?.title ? `Page title: ${metadata.title}` : ""}
+${metadata?.description ? `Existing description: ${metadata.description}` : ""}
+
+Page content:
+${content.substring(0, 8000)} ${content.length > 8000 ? "...[truncated]" : ""}
+
+Return as JSON with "description" and "summary" fields.
+If the content is too brief or lacks substance, return empty string for "summary".`
+
+    const response = await this.createChatCompletion({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a documentation summarizer that creates concise, informative descriptions and summaries.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+    })
+
+    const result = response.choices[0]?.message?.content
+    if (!result) {
+      // Fallback if no response
+      return {
+        description: "Page content",
+        summary: "",
+      }
+    }
+
+    try {
+      const parsed = JSON.parse(result) as {
+        description?: string
+        summary?: string
+      }
+
+      // Validate and sanitize the response
+      return {
+        description: (parsed.description || "Page content").substring(0, 100),
+        summary: (parsed.summary || "").substring(0, 500),
+      }
+    } catch (error) {
+      console.error("Failed to parse page summary response:", error)
+      // Fallback on parse error
+      return {
+        description: "Page content",
+        summary: "",
+      }
     }
   }
 }
@@ -244,6 +375,27 @@ class OpenRouterClientWrapper {
   }
 
   /**
+   * Evaluate change importance - delegates to mock or real client
+   */
+  async evaluateChangeImportance(
+    contentDiff: string,
+    model = "openai/gpt-4o-mini",
+  ): Promise<number> {
+    console.log(
+      `[OpenRouter] evaluateChangeImportance called with model: ${model}`,
+    )
+    console.log(`[OpenRouter] Using ${this.useMock ? "MOCK" : "REAL"} client`)
+
+    if ("evaluateChangeImportance" in this.client) {
+      return await this.client.evaluateChangeImportance(contentDiff, model)
+    }
+
+    // Fallback for mock - return a default score of 3 (significant)
+    console.log("[OpenRouter] Mock fallback: returning score 3")
+    return 3
+  }
+
+  /**
    * Summarize content - only available in real client
    */
   async summarizeContent(
@@ -273,6 +425,29 @@ class OpenRouterClientWrapper {
     }
     // Fallback for mock
     return {} as T
+  }
+
+  /**
+   * Generate page summary - delegates to mock or real client
+   */
+  async generatePageSummary(
+    content: string,
+    metadata?: {
+      title?: string
+      description?: string
+      [key: string]: unknown
+    },
+    model = "openai/gpt-4o-mini",
+  ): Promise<{ description: string; summary: string }> {
+    if ("generatePageSummary" in this.client) {
+      return await this.client.generatePageSummary(content, metadata, model)
+    }
+    // Fallback for mock - generate simple summary
+    const firstLine = content.split("\n")[0] || "Page content"
+    return {
+      description: firstLine.substring(0, 100),
+      summary: content.length > 500 ? content.substring(0, 500) : "",
+    }
   }
 }
 

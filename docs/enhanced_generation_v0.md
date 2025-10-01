@@ -7,6 +7,7 @@ This specification describes improvements to the page processing pipeline and ll
 2. Generating AI-powered page summaries
 3. Improving llms.txt and llms-full.txt generation with structured content
 
+
 ## 1. Page Title and Summary Generation
 
 ### 1.1 Database Schema Updates
@@ -105,44 +106,82 @@ async generatePageSummary(content: string, metadata?: {
 
 ### 1.4 Integration into processUrl Function
 
-Modified flow in `processUrl`:
+Modified flow to match current implementation with new summary generation:
 
 ```typescript
 async function processUrl(event) {
-  // ... existing setup ...
+  // Step 1: Get context (domain, job info) - EXISTING
 
-  // 1. Clean content
-  const cleanedContent = cleanContent(rawContent);
+  // Step 2: Clean content - EXISTING
+  const cleanedContent = await step.run("clean-content", async () => {
+    return cleanContent(rawContent, {
+      extractMain: true,
+      removeMetadata: true,
+    });
+  });
 
-  // 2. Generate fingerprint and check changes
-  const fingerprint = generateFingerprint(cleanedContent);
-  const { changed, similarity } = compareWithPrevious(fingerprint, prevFingerprint);
+  // Step 3: Generate diff with previous version - EXISTING
+  const diffAnalysis = await step.run("generate-diff", async () => {
+    // Get previous version, generate diff
+    // Returns: { isNew, diff, previousVersionId }
+  });
 
-  // 3. Generate page summary (NEW)
-  const summaryData = await openRouterService.generatePageSummary(
-    cleanedContent,
-    {
-      title: event.data.metadata?.title,
-      description: event.data.metadata?.description
-    }
-  );
-
-  // 4. Enhance content if changed
-  let processedContent = cleanedContent;
-  if (changed && similarity < 0.95) {
-    processedContent = await openRouterService.processPageContent(cleanedContent);
+  // Step 4: Check if content changed - early exit if no changes - EXISTING
+  if (!diffAnalysis.isNew && diffAnalysis.diff && !diffAnalysis.diff.hasChanges) {
+    // Store unchanged content, create version with semanticImportance: null
+    // Skip remaining steps
+    return { skipped: true };
   }
 
-  // 5. Store PageVersion with new fields
-  await prisma.pageVersion.create({
-    data: {
-      // ... existing fields ...
-      page_title: event.data.metadata?.title || extractTitleFromContent(cleanedContent),
-      page_description: summaryData.description,
-      page_summary: summaryData.summary || null,
-      // ... rest of fields ...
-    }
+  // Step 4.5: Generate page summary (NEW - ADD HERE)
+  const pageSummary = await step.run("generate-page-summary", async () => {
+    const summaryData = await openRouter.generatePageSummary(
+      cleanedContent,
+      event.data.metadata,  // Pass Firecrawl metadata if available
+      domainInfo.openrouter_model || "openai/gpt-4o-mini"
+    );
+
+    return {
+      title: event.data.metadata?.title || extractTitleFromContent(cleanedContent),
+      description: summaryData.description,
+      summary: summaryData.summary
+    };
   });
+
+  // Step 5: Evaluate semantic importance of changes - EXISTING
+  const semanticAnalysis = await step.run("evaluate-change-importance", async () => {
+    // Returns score 1-4
+  });
+
+  // Step 6: Conditional enhancement based on semantic importance - EXISTING
+  let processedContent = null;
+  if (semanticAnalysis.score >= 2) {
+    processedContent = await step.run("enhance-content", async () => {
+      // Enhance with OpenRouter
+    });
+  }
+
+  // Step 7: Store content to storage - EXISTING
+
+  // Step 8: Create page version record - MODIFY
+  const pageVersion = await step.run("create-page-version", async () => {
+    return await db.page.createVersion({
+      pageId,
+      jobId,
+      url,
+      rawMdBlobUrl: storagePaths.rawPath,
+      htmlMdBlobUrl: storagePaths.processedPath,
+      changeStatus,
+      reason: semanticAnalysis.reason,
+      semanticImportance: semanticAnalysis.score,
+      // NEW fields
+      pageTitle: pageSummary.title,
+      pageDescription: pageSummary.description,
+      pageSummary: pageSummary.summary,
+    });
+  });
+
+  // Steps 9-11: Update last known version, increment counters, emit event - EXISTING
 }
 ```
 
@@ -258,35 +297,57 @@ async function generateLlmsFullTxt(pages: PageData[]): Promise<string> {
 
 ## 3. Implementation Pipeline
 
-### Phase 1: Database and Storage (Day 1)
-1. Update Prisma schema with new fields
+### Phase 1: Database and Storage (~30 mins)
+1. ✅ Update Prisma schema with new fields (page_title, page_description, page_summary)
 2. Run migration: `pnpm db:generate && pnpm db:push`
-3. Update TypeScript types
+3. Update TypeScript types in db layer
 
-### Phase 2: Metadata Extraction (Day 1)
-1. Modify `handleCrawlPage` to extract Firecrawl metadata
-2. Pass metadata through event system to `processUrl`
-3. Store title from Firecrawl in PageVersion
+### Phase 2: OpenRouter Client (~45 mins)
+1. ✅ Re-implement `generatePageSummary` method with structured JSON output
+2. Add method to wrapper class for mock support
+3. Test with sample content
 
-### Phase 3: Summary Generation (Day 2)
-1. Implement `generatePageSummary` in OpenRouter service
-2. Add structured JSON output schema
-3. Integrate into `processUrl` flow
-4. Test with mock data
+### Phase 3: Event System & Metadata Extraction (~45 mins)
+1. Update event types to include metadata field
+2. Modify `handleCrawlPage` to pass metadata in event
+3. Update `processUrl` to receive and use metadata
 
-### Phase 4: llms.txt Generation (Day 3)
+### Phase 4: Summary Generation Integration (~1 hour)
+1. Add summary generation step to `processUrl` (after cleaning, before/after diff)
+2. Store summaries in PageVersion record
+3. Handle case when no changes detected (still generate summaries)
+4. Test with real crawl data
+
+### Phase 5: llms.txt Generation Enhancement (~1.5 hours)
 1. Update data fetching to include new fields
-2. Implement new prompt template with titles/descriptions
+2. Implement new prompt template using titles/descriptions
 3. Modify `generateLlmsTxt` to use structured page data
 4. Update `generateLlmsFullTxt` for comprehensive output
 
-### Phase 5: Testing and Optimization (Day 4)
+### Phase 6: Testing and Optimization (~1 hour)
 1. Integration tests for full pipeline
-2. Verify AI response quality
+2. Verify AI response quality matches FastHTML example
 3. Optimize prompts based on output
 4. Performance testing with large sites
 
-## 4. Configuration and Settings
+## 4. Important Design Decisions
+
+### When Summary Generation Happens
+- **Always generate summaries**: Even for unchanged pages (semantic_importance = null) to ensure metadata
+- **Placement in pipeline**: After cleaning, can be before or after diff generation
+- **Cost consideration**: Use cheapest model (gpt-4o-mini) since this runs for every page
+
+### Separation of Concerns
+- **Summary Generation**: Cheap, always runs, provides metadata (title, description, summary)
+- **Content Enhancement**: Expensive, only runs when semantic_importance >= 2
+- **This separation optimizes costs** while ensuring all pages have useful metadata
+
+### Handling Edge Cases
+- **No Firecrawl metadata**: Extract title from content or use URL
+- **No changes detected**: Still generate and store summaries for consistency
+- **Empty content**: Return minimal description, empty summary
+
+## 5. Configuration and Settings
 
 ### Environment Variables
 No new environment variables required - uses existing OpenRouter configuration.
