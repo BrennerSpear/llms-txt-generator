@@ -8,10 +8,12 @@ import { finalizeJob } from "~/lib/inngest/functions/finalizeJob"
 import { handleCrawlCompleted } from "~/lib/inngest/functions/handleCrawlCompleted"
 import { handleCrawlPage } from "~/lib/inngest/functions/handleCrawlPage"
 import { processUrl } from "~/lib/inngest/functions/processUrl"
+import { scheduleRecrawls } from "~/lib/inngest/functions/scheduleRecrawls"
 // Import all Inngest functions
 import { startCrawl } from "~/lib/inngest/functions/startCrawl"
 
 const functions: InngestFunction.Like[] = [
+  scheduleRecrawls, // F0 - Schedule domain recrawls (hourly cron)
   startCrawl, // F1 - Start domain crawl
   handleCrawlPage, // F2 - Handle incoming page from webhook
   processUrl, // F3 - Process and analyze page content
