@@ -1,6 +1,7 @@
 import { NonRetriableError } from "inngest"
 import { db } from "~/lib/db"
-import { storage } from "~/lib/storage/client"
+import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
+import { getLlmsFullTxtPath, getLlmsTxtPath } from "~/lib/storage/paths"
 import { inngest } from "../client"
 
 export const assembleArtifacts = inngest.createFunction(
@@ -105,16 +106,11 @@ export const assembleArtifacts = inngest.createFunction(
           if (version.html_md_blob_url) {
             try {
               // Download the processed content from storage
-              const pathParts = version.html_md_blob_url.split("/")
-              const bucket = pathParts[0]
-              if (!bucket) {
-                throw new Error(
-                  `Bucket not found in ${version.html_md_blob_url}`,
-                )
-              }
-              const path = pathParts.slice(1).join("/")
-
-              const result = await storage.download(bucket, path)
+              // html_md_blob_url now contains the full path within the artifacts bucket
+              const result = await storage.download(
+                STORAGE_BUCKETS.ARTIFACTS,
+                version.html_md_blob_url,
+              )
 
               if (result) {
                 const content = await result.text()
@@ -138,25 +134,28 @@ export const assembleArtifacts = inngest.createFunction(
     // Step 4: Store artifacts to Supabase Storage
     const artifactIds = await step.run("store-artifacts", async () => {
       const ids: string[] = []
-      const timestamp = Date.now()
+
+      // Get job info to get domain for path generation
+      const job = await db.job.getById(jobId)
+      if (!job) {
+        throw new NonRetriableError(`Job not found: ${jobId}`)
+      }
 
       if (llmsTxtContent) {
         // Store llms.txt
-        const llmsTxtPath = `jobs/${jobId}/artifacts/llms_txt_${timestamp}.txt`
+        const llmsTxtPath = getLlmsTxtPath(job.domain.domain, jobId)
         const uploadResult = await storage.upload(
-          "artifacts",
+          STORAGE_BUCKETS.ARTIFACTS,
           llmsTxtPath,
           llmsTxtContent,
         )
 
         if (uploadResult) {
-          const url = `artifacts/${llmsTxtPath}`
-
           // Create artifact record
           const artifact = await db.artifact.create({
             jobId,
             kind: "llms_txt",
-            blobUrl: url,
+            blobUrl: llmsTxtPath,
             version: 1,
           })
           ids.push(artifact.id)
@@ -165,21 +164,19 @@ export const assembleArtifacts = inngest.createFunction(
 
       if (llmsFullTxtContent) {
         // Store llms-full.txt
-        const llmsFullPath = `jobs/${jobId}/artifacts/llms_full_txt_${timestamp}.txt`
+        const llmsFullPath = getLlmsFullTxtPath(job.domain.domain, jobId)
         const uploadResult = await storage.upload(
-          "artifacts",
+          STORAGE_BUCKETS.ARTIFACTS,
           llmsFullPath,
           llmsFullTxtContent,
         )
 
         if (uploadResult) {
-          const url = `artifacts/${llmsFullPath}`
-
           // Create artifact record
           const artifact = await db.artifact.create({
             jobId,
             kind: "llms_full_txt",
-            blobUrl: url,
+            blobUrl: llmsFullPath,
             version: 1,
           })
           ids.push(artifact.id)

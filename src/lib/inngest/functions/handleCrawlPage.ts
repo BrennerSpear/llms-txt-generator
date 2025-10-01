@@ -1,6 +1,7 @@
 import type { Document } from "firecrawl"
 import { db } from "~/lib/db"
 import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
+import { getRawPagePath } from "~/lib/storage/paths"
 import { inngest, sendEvent } from "../client"
 
 /**
@@ -83,22 +84,28 @@ export const handleCrawlPage = inngest.createFunction(
       })
     })
 
-    // Step 3: Store raw markdown content to Supabase Storage
+    // Step 3: Get domain URL for path generation
+    const domain = await step.run("get-domain", async () => {
+      const foundDomain = await db.domain.getById(domainId)
+      if (!foundDomain) {
+        throw new Error(`Domain not found: ${domainId}`)
+      }
+      return foundDomain.domain
+    })
+
+    // Step 4: Store raw markdown content to Supabase Storage
     const rawMdPath = await step.run("store-raw-markdown", async () => {
-      const timestamp = Date.now()
-      const urlSlug = url.replace(/[^a-z0-9]/gi, "_").toLowerCase()
-      const path = `jobs/${jobId}/raw/${urlSlug}_${timestamp}.md`
-
-      await storage.upload(STORAGE_BUCKETS.PAGE_CONTENT, path, markdown)
-
+      const path = getRawPagePath(domain, jobId, url)
+      await storage.upload(STORAGE_BUCKETS.ARTIFACTS, path, markdown)
       return path
     })
 
-    // Step 4: Emit page process requested event for further processing
+    // Step 5: Emit page process requested event for further processing
     await step.run("emit-process-requested", async () => {
       await sendEvent("page/process.requested", {
         pageId: page.id,
         jobId,
+        domainUrl: domain,
         url,
         rawContent: markdown,
         rawMdPath, // Pass the path where raw markdown was stored

@@ -57,6 +57,7 @@ type PageProcessRequested = {
   data: {
     pageId: string
     jobId: string
+    domainUrl: string
     url: string
     rawContent: string
     rawMdPath: string // Path where raw markdown from Firecrawl is stored
