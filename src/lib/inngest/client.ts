@@ -21,10 +21,7 @@ type DomainCrawlPage = {
     url: string
     markdown: string
     metadata?: DocumentMetadata
-    changeTracking?: {
-      hasChanges: boolean
-      diff?: string
-    }
+    changeTracking: Record<string, unknown>
     timestamp: string
   }
 }
@@ -35,7 +32,6 @@ type DomainCrawlCompleted = {
     jobId: string
     firecrawlJobId: string
     completedAt: string
-    totalPages: number
     stats?: {
       duration: number
       pagesProcessed: number
@@ -62,10 +58,7 @@ type PageProcessRequested = {
     url: string
     rawContent: string
     rawMdPath: string // Path where raw markdown from Firecrawl is stored
-    changeTracking?: {
-      hasChanges: boolean
-      diff?: string
-    }
+    changeTracking?: Record<string, unknown>
   }
 }
 

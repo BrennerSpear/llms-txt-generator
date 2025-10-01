@@ -22,7 +22,7 @@
     "test:integration": "node test/integration-tests/simple-test.js",
     "test:crawl:mock": "tsx test/integration-tests/crawl-pipeline.mock.test.ts",
     "test:crawl": "tsx test/integration-tests/crawl-pipeline.test.ts",
-    "inngest:dev": "pnpm dlx inngest-cli@latest dev"
+    "inngest:dev": "pnpm dlx inngest-cli@latest dev --no-poll"
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",

@@ -13,7 +13,7 @@ export const handleCrawlCompleted = inngest.createFunction(
   },
   { event: "domain/crawl.completed" },
   async ({ event, step }) => {
-    const { jobId, firecrawlJobId, totalPages, domainId } = event.data
+    const { jobId, firecrawlJobId, domainId } = event.data
 
     // Step 1: Mark the job stream as closed
     const jobData = await step.run("mark-job-stream-closed", async () => {
@@ -30,92 +30,84 @@ export const handleCrawlCompleted = inngest.createFunction(
         )
       }
 
+      // Mark stream as closed
+      await db.job.markStreamClosed(jobId)
+
       // Update job stats with crawl completion info
       await db.job.mergeStats(jobId, {
         crawlCompleted: true,
         firecrawlJobId,
-        totalPages,
         streamClosedAt: new Date().toISOString(),
       })
 
       return { job, domainId: job.domain_id }
     })
 
-    // Step 2: Check if all pages have been processed
-    const allPagesProcessed = await step.run(
-      "check-all-pages-processed",
-      async () => {
-        // Count total page versions created for this job
-        const counts = await db.page.countPagesForJob(jobId)
+    // Step 2: Check if job is ready for assembly
+    const isReady = await step.run("check-ready-for-assembly", async () => {
+      const currentJob = await db.job.getById(jobId)
+      const pagesProcessed = currentJob?.pages_processed ?? 0
+      const pagesReceived = currentJob?.pages_received ?? 0
 
-        console.log(
-          `Job ${jobId}: Processed ${counts.total}/${totalPages} pages`,
-        )
+      // Check if we're ready for assembly
+      const ready = await db.job.isReadyForAssembly(jobId)
 
-        // Check if we've processed all expected pages
-        // Allow for some discrepancy as webhooks might miss pages
-        const processingComplete = counts.total >= totalPages * 0.9 // 90% threshold
+      console.log(`🏁 Crawl completed for job ${jobId}: Stream is now CLOSED`)
+      console.log(
+        `   📊 Received: ${pagesReceived}, Processed: ${pagesProcessed}`,
+      )
 
-        return {
-          processedCount: counts.total,
-          expectedPages: totalPages,
-          processingComplete,
+      // Diagnose why we might not be ready
+      if (!ready) {
+        if (pagesReceived === 0) {
+          console.log(
+            "   ⚠️ No pages received yet. Waiting for pages to arrive via webhooks.",
+          )
+        } else if (pagesProcessed < pagesReceived) {
+          console.log(
+            `   ⏳ Waiting for ${pagesReceived - pagesProcessed} pages to finish processing.`,
+          )
         }
-      },
-    )
+      }
+
+      return {
+        ready,
+        pagesProcessed,
+        pagesReceived,
+      }
+    })
 
     // Step 3: Conditionally emit assembly event
-    if (allPagesProcessed.processingComplete) {
+    if (isReady.ready) {
       await step.sendEvent("emit-assembly-event", {
         name: "job/assemble.requested",
         data: {
           jobId,
           domainId: jobData.domainId,
-          completedPages: allPagesProcessed.processedCount,
+          completedPages: isReady.pagesProcessed,
         },
       })
 
-      console.log(`Job ${jobId}: Assembly triggered`)
+      console.log(
+        `   ✨ Assembly triggered immediately (${isReady.pagesProcessed} pages processed)`,
+      )
     } else {
-      // Wait a bit more for pages to process
-      await step.sleep("wait-for-stragglers", "30s")
-
-      // Recheck after waiting
-      const recheck = await step.run("recheck-pages-processed", async () => {
-        const counts = await db.page.countPagesForJob(jobId)
-        return counts.total >= allPagesProcessed.expectedPages * 0.9
+      // Just update stats to note we're waiting
+      await step.run("note-waiting-for-pages", async () => {
+        await db.job.mergeStats(jobId, {
+          streamClosed: true,
+          pagesProcessedAtClose: isReady.pagesProcessed,
+          pagesReceivedAtClose: isReady.pagesReceived,
+          note: `Stream closed. Received: ${isReady.pagesReceived}, Processed: ${isReady.pagesProcessed}`,
+        })
       })
-
-      if (recheck) {
-        await step.sendEvent("emit-delayed-assembly-event", {
-          name: "job/assemble.requested",
-          data: {
-            jobId,
-            domainId: jobData.domainId,
-            completedPages: allPagesProcessed.processedCount,
-          },
-        })
-
-        console.log(`Job ${jobId}: Assembly triggered after delay`)
-      } else {
-        // Mark job as partially completed
-        await step.run("mark-partial-completion", async () => {
-          await db.job.complete(jobId, {
-            partialCompletion: true,
-            processedPages: allPagesProcessed.processedCount,
-            expectedPages: allPagesProcessed.expectedPages,
-          })
-        })
-
-        console.log(`Job ${jobId}: Marked as partially completed`)
-      }
     }
 
     return {
       jobId,
-      processingComplete: allPagesProcessed.processingComplete,
-      processedPages: allPagesProcessed.processedCount,
-      expectedPages: allPagesProcessed.expectedPages,
+      ready: isReady.ready,
+      pagesProcessed: isReady.pagesProcessed,
+      pagesReceived: isReady.pagesReceived,
     }
   },
 )

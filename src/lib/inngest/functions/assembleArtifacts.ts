@@ -45,6 +45,14 @@ export const assembleArtifacts = inngest.createFunction(
         throw new NonRetriableError(`Job not found: ${jobId}`)
       }
 
+      // Check if job has been canceled
+      if (job.status === "canceled") {
+        console.warn(
+          `🚫 Job ${jobId} has been canceled, skipping artifact assembly`,
+        )
+        throw new NonRetriableError(`Job has been canceled: ${jobId}`)
+      }
+
       const domain = job.domain
 
       // Build header (simplified version, no prompt profile for now)
@@ -143,7 +151,11 @@ export const assembleArtifacts = inngest.createFunction(
 
       if (llmsTxtContent) {
         // Store llms.txt
-        const llmsTxtPath = getLlmsTxtPath(job.domain.domain, jobId)
+        const llmsTxtPath = getLlmsTxtPath(
+          job.domain.domain,
+          jobId,
+          new Date(job.started_at),
+        )
         const uploadResult = await storage.upload(
           STORAGE_BUCKETS.ARTIFACTS,
           llmsTxtPath,
@@ -164,7 +176,11 @@ export const assembleArtifacts = inngest.createFunction(
 
       if (llmsFullTxtContent) {
         // Store llms-full.txt
-        const llmsFullPath = getLlmsFullTxtPath(job.domain.domain, jobId)
+        const llmsFullPath = getLlmsFullTxtPath(
+          job.domain.domain,
+          jobId,
+          new Date(job.started_at),
+        )
         const uploadResult = await storage.upload(
           STORAGE_BUCKETS.ARTIFACTS,
           llmsFullPath,

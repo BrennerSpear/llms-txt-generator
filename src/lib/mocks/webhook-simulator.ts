@@ -54,7 +54,6 @@ export class WebhookSimulator {
       timestamp: new Date().toISOString(),
       data: {
         url: baseUrl,
-        totalPages: pages.length,
         options: {
           maxPages: pages.length,
         },
@@ -112,7 +111,6 @@ export class WebhookSimulator {
       jobId,
       timestamp: new Date().toISOString(),
       data: {
-        totalPages: sentPages.length,
         pagesScraped: sentPages.length,
         creditsUsed: sentPages.length,
         completedAt: new Date().toISOString(),
@@ -154,7 +152,6 @@ export class WebhookSimulator {
       timestamp: new Date().toISOString(),
       data: {
         url: baseUrl,
-        totalPages: pageCount,
         options: {
           maxPages: pageCount,
         },
@@ -233,7 +230,6 @@ export class WebhookSimulator {
       jobId,
       timestamp: new Date().toISOString(),
       data: {
-        totalPages: pages.length,
         pagesScraped: pages.length,
         creditsUsed: pages.length,
         completedAt: new Date().toISOString(),

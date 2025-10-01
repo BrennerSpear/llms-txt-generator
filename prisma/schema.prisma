@@ -49,6 +49,9 @@ model Job {
     firecrawl_job_id String?
     started_at       DateTime      @default(now())
     finished_at      DateTime?
+    pages_processed  Int           @default(0)
+    pages_received   Int           @default(0)
+    stream_closed    Boolean       @default(false)
     stats            Json          @default("{}")
     pages            Page[]
     page_versions    PageVersion[]
@@ -113,6 +116,7 @@ enum JobStatus {
     processing
     finished
     failed
+    canceled
 }
 
 enum ArtifactKind {

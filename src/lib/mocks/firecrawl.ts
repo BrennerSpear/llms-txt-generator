@@ -245,7 +245,6 @@ function scheduleMockWebhooks(
               type: "crawl.completed",
               jobId,
               data: {
-                totalPages: pages.length,
                 pagesScraped: pages.length,
                 creditsUsed: pages.length,
               },

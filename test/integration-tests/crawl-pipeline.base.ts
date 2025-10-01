@@ -44,10 +44,11 @@ interface TestConfig {
   useMockServices: boolean
   firecrawlApiKey?: string
   openrouterApiKey?: string
+  maxPages?: number
 }
 
 export async function runCrawlPipelineTest(config: TestConfig) {
-  const { baseUrl, testDomain, useMockServices } = config
+  const { baseUrl, testDomain, useMockServices, maxPages } = config
   const startTime = Date.now()
 
   console.log("🧪 Starting Integration Test for Crawl Pipeline")
@@ -65,7 +66,7 @@ export async function runCrawlPipelineTest(config: TestConfig) {
         url: testDomain,
         checkIntervalMinutes: 1440,
         openrouterModel: "openai/gpt-4o-mini",
-        maxPages: 10, // Limit to 10 pages for testing
+        maxPages: maxPages ?? 10, // Limit to 10 pages for testing
       }),
     })
 
@@ -103,7 +104,7 @@ export async function runCrawlPipelineTest(config: TestConfig) {
             url: testDomain,
             checkIntervalMinutes: 1440,
             openrouterModel: "openai/gpt-4o-mini",
-            maxPages: 10,
+            maxPages: maxPages ?? 10,
           }),
         }).catch((e) => {
           // If we get a 409, it means there's already an active job

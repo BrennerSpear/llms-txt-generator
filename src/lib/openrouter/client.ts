@@ -73,6 +73,12 @@ export class OpenRouterClient {
     systemPrompt?: string,
     model = "openai/gpt-4o-mini",
   ): Promise<string> {
+    console.log("[OpenRouter REAL Client] processPageContent called")
+    console.log(`[OpenRouter REAL Client] Model: ${model}`)
+    console.log(
+      `[OpenRouter REAL Client] API Key: ${this.client.apiKey?.substring(0, 20)}...`,
+    )
+
     const defaultSystemPrompt = `You are a documentation processor. Your task is to clean and enhance markdown content for inclusion in an llms.txt file.
 
 Instructions:
@@ -84,6 +90,8 @@ Instructions:
 6. Focus on content that would be valuable for an LLM to understand the documentation
 
 Return only the processed markdown content without any additional commentary.`
+
+    console.log("[OpenRouter REAL Client] Making API call to OpenRouter...")
 
     const response = await this.createChatCompletion({
       model,
@@ -100,6 +108,11 @@ Return only the processed markdown content without any additional commentary.`
       temperature: 0.3,
       max_tokens: 4000,
     })
+
+    console.log("[OpenRouter REAL Client] API call completed")
+    console.log(
+      `[OpenRouter REAL Client] Response received: ${response.choices.length} choices`,
+    )
 
     return response.choices[0]?.message?.content ?? content
   }
@@ -183,11 +196,16 @@ class OpenRouterClientWrapper {
       env.USE_MOCK_SERVICES === true ||
       (env.USE_MOCK_SERVICES !== false && env.NODE_ENV === "development")
 
+    console.log("[OpenRouter] USE_MOCK_SERVICES:", env.USE_MOCK_SERVICES)
+    console.log("[OpenRouter] NODE_ENV:", env.NODE_ENV)
+    console.log("[OpenRouter] useMock result:", this.useMock)
+
     if (this.useMock) {
       console.log("[OpenRouter] Using mock service")
       this.client = mockOpenRouter
     } else {
       console.log("[OpenRouter] Using real service")
+      console.log("[OpenRouter] API Key present:", !!env.OPENROUTER_API_KEY)
       this.client = new OpenRouterClient()
     }
   }
@@ -209,7 +227,20 @@ class OpenRouterClientWrapper {
     systemPrompt?: string,
     model = "openai/gpt-4o-mini",
   ): Promise<string> {
-    return await this.client.processPageContent(content, systemPrompt, model)
+    console.log(`[OpenRouter] processPageContent called with model: ${model}`)
+    console.log(`[OpenRouter] Using ${this.useMock ? "MOCK" : "REAL"} client`)
+    console.log(`[OpenRouter] Content length: ${content.length} characters`)
+
+    const result = await this.client.processPageContent(
+      content,
+      systemPrompt,
+      model,
+    )
+
+    console.log(
+      `[OpenRouter] Processed content length: ${result.length} characters`,
+    )
+    return result
   }
 
   /**
