@@ -65,6 +65,7 @@ export async function runCrawlPipelineTest(config: TestConfig) {
         url: testDomain,
         checkIntervalMinutes: 1440,
         openrouterModel: "openai/gpt-4o-mini",
+        maxPages: 10, // Limit to 10 pages for testing
       }),
     })
 
@@ -102,6 +103,7 @@ export async function runCrawlPipelineTest(config: TestConfig) {
             url: testDomain,
             checkIntervalMinutes: 1440,
             openrouterModel: "openai/gpt-4o-mini",
+            maxPages: 10,
           }),
         }).catch((e) => {
           // If we get a 409, it means there's already an active job

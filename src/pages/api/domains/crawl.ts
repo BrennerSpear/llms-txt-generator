@@ -10,7 +10,8 @@ import { sendEvent } from "~/lib/inngest/client"
  * {
  *   "url": "example.com" or "https://example.com",
  *   "checkIntervalMinutes": 1440 (optional, defaults to 1440 - 24 hours),
- *   "openrouterModel": "openai/gpt-4o-mini" (optional)
+ *   "openrouterModel": "openai/gpt-4o-mini" (optional),
+ *   "maxPages": 10 (optional, defaults to 10)
  * }
  */
 export default async function handler(
@@ -26,6 +27,7 @@ export default async function handler(
       url,
       checkIntervalMinutes = 1440,
       openrouterModel = "openai/gpt-4o-mini",
+      maxPages = 10,
     } = req.body
 
     if (!url || typeof url !== "string") {
@@ -98,6 +100,7 @@ export default async function handler(
       type: "initial" as const,
       requestedBy: "api",
       scheduledAt: new Date().toISOString(),
+      maxPages,
     })
 
     // Try to get the job that was just created (might not exist immediately)

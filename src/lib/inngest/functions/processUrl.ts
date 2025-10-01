@@ -1,4 +1,5 @@
 import { db } from "~/lib/db"
+import { openRouter } from "~/lib/openrouter/client"
 import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
 import { getProcessedPagePath } from "~/lib/storage/paths"
 import { cleanContent } from "~/lib/utils/cleaning"
@@ -11,8 +12,9 @@ import { inngest, sendEvent } from "../client"
 
 /**
  * F3 - Process Single URL Function
- * Processes a single page: cleans content, computes fingerprint,
- * compares with previous version, and stores version metadata
+ * Processes a single page: uses OpenRouter to enhance content,
+ * computes fingerprint, compares with previous version,
+ * and stores version metadata
  */
 export const processUrl = inngest.createFunction(
   {
@@ -27,30 +29,57 @@ export const processUrl = inngest.createFunction(
   async ({ event, step }) => {
     const { pageId, jobId, domainUrl, url, rawContent, rawMdPath } = event.data
 
-    // Step 1: Clean and process content
-    const cleanedContent = await step.run("clean-content", async () => {
-      return cleanContent(rawContent, {
-        extractMain: true,
-        removeMetadata: true,
-      })
-    })
-
-    // Step 2: Generate content fingerprint
-    const fingerprint = await step.run("generate-fingerprint", async () => {
-      return generateFingerprint(cleanedContent)
-    })
-
-    // Step 3: Find and compare with previous version
-    const comparison = await step.run("compare-with-previous", async () => {
-      // Get the page record to find domain
+    // Step 1: Get domain information for processing context
+    const domainInfo = await step.run("get-domain-info", async () => {
       const page = await db.page.getById(pageId)
       if (!page) {
         throw new Error(`Page not found: ${pageId}`)
       }
 
+      const domain = await db.domain.getById(page.domain_id)
+      if (!domain) {
+        throw new Error(`Domain not found: ${page.domain_id}`)
+      }
+
+      return domain
+    })
+
+    // Step 2: Clean and process content with OpenRouter
+    const processedContent = await step.run(
+      "process-with-openrouter",
+      async () => {
+        // First do basic cleaning
+        const basicCleaned = cleanContent(rawContent, {
+          extractMain: true,
+          removeMetadata: true,
+        })
+
+        // Then enhance with OpenRouter using domain-specific settings
+        const systemPrompt =
+          domainInfo.prompt_profile?.summary_prompt || undefined
+        const model = domainInfo.openrouter_model || "openai/gpt-4o-mini"
+
+        // Use OpenRouter to process the content - no fallback
+        const enhanced = await openRouter.processPageContent(
+          basicCleaned,
+          systemPrompt,
+          model,
+        )
+
+        return enhanced
+      },
+    )
+
+    // Step 3: Generate content fingerprint
+    const fingerprint = await step.run("generate-fingerprint", async () => {
+      return generateFingerprint(processedContent)
+    })
+
+    // Step 4: Find and compare with previous version
+    const comparison = await step.run("compare-with-previous", async () => {
       // Get previous version for this URL
       const previousVersion = await db.page.getPreviousVersionByFingerprint(
-        page.domain_id,
+        domainInfo.id,
         url,
       )
 
@@ -95,7 +124,7 @@ export const processUrl = inngest.createFunction(
       }
 
       const similarityScore = previousContent
-        ? calculateSimilarity(cleanedContent, previousContent)
+        ? calculateSimilarity(processedContent, previousContent)
         : 0
 
       const changeAnalysis = hasChangedEnough(similarityScore, {
@@ -111,30 +140,30 @@ export const processUrl = inngest.createFunction(
       }
     })
 
-    // Step 4: Store cleaned/processed content to storage
-    const storagePaths = await step.run("store-cleaned-content", async () => {
-      // Store cleaned/processed markdown (this will be the OpenRouter processed version eventually)
+    // Step 5: Store cleaned/processed content to storage
+    const storagePaths = await step.run("store-processed-content", async () => {
+      // Store OpenRouter-processed markdown
       const processedPath = getProcessedPagePath(domainUrl, jobId, url)
       await storage.upload(
         STORAGE_BUCKETS.ARTIFACTS,
         processedPath,
-        cleanedContent,
+        processedContent,
       )
 
       return {
         rawPath: rawMdPath, // Path to raw markdown from Firecrawl (already stored by handleCrawlPage)
-        processedPath, // Path to cleaned/processed markdown (will be OpenRouter output)
+        processedPath, // Path to OpenRouter-processed markdown
       }
     })
 
-    // Step 5: Create page version record
+    // Step 6: Create page version record
     const pageVersion = await step.run("create-page-version", async () => {
       return await db.page.createVersion({
         pageId,
         jobId,
         url,
         rawMdBlobUrl: storagePaths.rawPath, // Markdown directly from Firecrawl
-        htmlMdBlobUrl: storagePaths.processedPath, // Processed/cleaned version (will be from OpenRouter)
+        htmlMdBlobUrl: storagePaths.processedPath, // OpenRouter-processed version
         contentFingerprint: fingerprint,
         prevFingerprint: comparison.prevFingerprint ?? undefined,
         similarityScore: comparison.similarityScore,
@@ -143,14 +172,14 @@ export const processUrl = inngest.createFunction(
       })
     })
 
-    // Step 6: Update page's last known version if content changed
+    // Step 7: Update page's last known version if content changed
     if (comparison.changed) {
       await step.run("update-last-known-version", async () => {
         await db.page.updateLastKnownVersion(pageId, pageVersion.id)
       })
     }
 
-    // Step 7: Emit page processed event
+    // Step 8: Emit page processed event
     await step.run("emit-page-processed", async () => {
       await sendEvent("page/processed", {
         pageId,

@@ -298,6 +298,50 @@ export class MockOpenRouterClient {
       yield content.slice(i, i + chunkSize)
     }
   }
+
+  /**
+   * Mock process page content - matches the real client interface
+   */
+  async processPageContent(
+    content: string,
+    systemPrompt?: string,
+    model = "openai/gpt-4o-mini",
+  ): Promise<string> {
+    // Simulate processing delay
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    // Return a mock processed version of the content
+    // In real usage, this would clean and enhance the markdown
+    const lines = content.split("\n")
+    const processedLines: string[] = []
+
+    for (const line of lines) {
+      // Skip obvious navigation/metadata lines
+      if (
+        line.includes("Cookie Policy") ||
+        line.includes("Terms of Service") ||
+        line.includes("Previous Page") ||
+        line.includes("Next Page")
+      ) {
+        continue
+      }
+
+      // Keep the line if it has content
+      if (line.trim()) {
+        processedLines.push(line)
+      }
+    }
+
+    // Add mock enhancement header
+    const enhanced = `# [Processed Document]
+
+${processedLines.join("\n")}
+
+---
+_Content processed and optimized for LLM consumption_`
+
+    return enhanced
+  }
 }
 
 // Export a singleton instance
