@@ -88,6 +88,7 @@ model PageVersion {
     prev_fingerprint    String?
     similarity_score    Float?
     changed_enough      Boolean
+    change_status       String?  // "same", "updated", etc from Firecrawl
     reason              String?
     created_at          DateTime @default(now())
 

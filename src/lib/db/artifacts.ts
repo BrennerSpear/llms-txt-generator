@@ -3,6 +3,28 @@ import { prisma } from "./client"
 
 export const artifactService = {
   /**
+   * Get the next version number for a domain and artifact kind
+   */
+  async getNextVersion(domainId: string, kind: ArtifactKind): Promise<number> {
+    const latestArtifact = await prisma.artifact.findFirst({
+      where: {
+        kind,
+        job: {
+          domain_id: domainId,
+        },
+      },
+      orderBy: {
+        version: "desc",
+      },
+      select: {
+        version: true,
+      },
+    })
+
+    return (latestArtifact?.version ?? 0) + 1
+  },
+
+  /**
    * Create an artifact
    */
   async create(data: {

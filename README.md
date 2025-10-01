@@ -1,3 +1,9 @@
+## Principles
+
+dev speed > cost - we can optimize cost later
+buy > build - try existing services first before building from scratch (firecrawl)
+
+
 ## Local Development
 
 ### First-time setup

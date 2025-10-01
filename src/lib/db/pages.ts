@@ -93,6 +93,7 @@ export const pageService = {
     prevFingerprint?: string
     similarityScore?: number
     changedEnough: boolean
+    changeStatus?: string
     reason?: string
   }): Promise<PageVersion> {
     return prisma.pageVersion.create({
@@ -106,6 +107,7 @@ export const pageService = {
         prev_fingerprint: data.prevFingerprint,
         similarity_score: data.similarityScore,
         changed_enough: data.changedEnough,
+        change_status: data.changeStatus,
         reason: data.reason,
       },
     })
@@ -167,6 +169,24 @@ export const pageService = {
   },
 
   /**
+   * Get all page versions for a job (to check changeStatus)
+   */
+  async getAllPageVersionsForJob(jobId: string): Promise<
+    (PageVersion & {
+      page: Page
+    })[]
+  > {
+    return prisma.pageVersion.findMany({
+      where: {
+        job_id: jobId,
+      },
+      include: {
+        page: true,
+      },
+    })
+  },
+
+  /**
    * Count pages for job
    */
   async countPagesForJob(jobId: string): Promise<{
@@ -209,6 +229,7 @@ export const pageService = {
       prevFingerprint?: string
       similarityScore?: number
       changedEnough: boolean
+      changeStatus?: string
       reason?: string
     }>,
   ): Promise<Prisma.BatchPayload> {
@@ -223,6 +244,7 @@ export const pageService = {
         prev_fingerprint: v.prevFingerprint,
         similarity_score: v.similarityScore,
         changed_enough: v.changedEnough,
+        change_status: v.changeStatus,
         reason: v.reason,
       })),
     })
