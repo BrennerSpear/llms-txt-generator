@@ -49,8 +49,6 @@ async function testDatabaseOperations() {
       pageId: page.id,
       jobId: job.id,
       url: page.url,
-      contentFingerprint: "test-fingerprint-123",
-      changedEnough: true,
       reason: "Initial crawl",
     })
     console.log(`✅ Page version created (ID: ${pageVersion.id})`)
