@@ -129,13 +129,18 @@ Be concise but informative.`
    * Categorize pages into logical groups
    */
   async categorizePages(
-    pages: Array<{ url: string; title?: string; summary?: string }>,
+    pages: Array<{
+      url: string
+      title: string
+      description: string
+      summary?: string
+    }>,
   ): Promise<Record<string, typeof pages>> {
     const systemPrompt = `You are organizing website pages into logical categories for documentation.
 Group pages based on their purpose and content type.`
 
     const userPrompt = `Categorize these pages into logical groups:
-${pages.map((p) => `- ${p.url}${p.title ? ` (${p.title})` : ""}`).join("\n")}
+${pages.map((p) => `- ${p.url} (${p.title})`).join("\n")}
 
 Return a JSON object where keys are category names and values are arrays of URLs.
 Use categories like: "Documentation", "API Reference", "Features", "Getting Started", "About", "Legal", etc.
@@ -223,23 +228,28 @@ Example format:
     domain: string,
     pages: Array<{
       url: string
+      title: string
+      description: string
+      summary?: string
       content: string
-      title?: string
     }>,
   ): Promise<string> {
     // Generate site overview
     const overview = await this.generateSiteOverview(domain, pages)
 
-    // Process and summarize each page
+    // Process pages - use existing summaries or generate new ones
     const pagesWithSummaries = await Promise.all(
       pages.map(async (page) => {
-        const summary = await this.summarizePage(page.url, page.content)
+        // Use existing summary if available, otherwise generate one
+        const effectiveSummary =
+          page.summary || (await this.summarizePage(page.url, page.content))
+
         const depth = page.url.split("/").length - 3 // Approximate depth
         const score = await this.scorePage(page.url, page.content, depth)
 
         return {
           ...page,
-          summary,
+          summary: effectiveSummary,
           score,
         }
       }),
@@ -285,9 +295,20 @@ Example format:
 
       for (const page of categoryPages) {
         const pagePath = page.url.replace(/^https?:\/\/[^\/]+/, "")
-        sections.push(`### ${page.title || pagePath}`)
+
+        // Use the page title from metadata
+        sections.push(`### ${page.title}`)
+
+        // Add description as a quote
+        if (page.description) {
+          sections.push(`> ${page.description}`)
+          sections.push("")
+        }
+
         sections.push(`**URL:** ${page.url}`)
         sections.push("")
+
+        // Add the summary (either from DB or generated)
         if (page.summary) {
           sections.push(page.summary)
           sections.push("")

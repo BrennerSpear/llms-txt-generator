@@ -19,6 +19,15 @@ interface GeneratorOptions {
   useMock?: boolean
 }
 
+// Enhanced page data structure including new metadata fields
+export interface PageData {
+  url: string
+  title: string // From page_title field
+  description: string // From page_description field
+  summary?: string // From page_summary field (if exists)
+  content: string // Raw content from Supabase storage
+}
+
 /**
  * Generate llms.txt content - either mock or using OpenRouter
  */
@@ -51,8 +60,16 @@ function generateMockLlmsTxt(
 
   for (const version of pageVersions) {
     const pageUrl = version.page.url
-    const pageTitle = pageUrl.split("/").pop() || "page"
-    const summary = `## ${pageTitle}\nURL: ${pageUrl}\nContent from ${domain}`
+    const pageTitle = version.page_title || pageUrl.split("/").pop() || "page"
+    const pageDescription = version.page_description || `Content from ${domain}`
+    const pageSummary = version.page_summary
+
+    let summary = `## ${pageTitle}\n`
+    summary += `> ${pageDescription}\n\n`
+    summary += `URL: ${pageUrl}\n`
+    if (pageSummary) {
+      summary += `\n${pageSummary}\n`
+    }
     summaries.push(summary)
   }
 
@@ -80,8 +97,8 @@ async function generateOpenRouterLlmsTxt(
     `Building llms.txt with OpenRouter for ${pageVersions.length} pages`,
   )
 
-  // Prepare page data with content
-  const pagesWithContent = await Promise.all(
+  // Prepare page data with content and metadata
+  const pagesWithContent: PageData[] = await Promise.all(
     pageVersions.map(async (version) => {
       let content = ""
 
@@ -102,10 +119,14 @@ async function generateOpenRouterLlmsTxt(
         }
       }
 
+      // Use new metadata fields if available, with fallbacks
       return {
         url: version.page.url,
+        title:
+          version.page_title || version.page.url.split("/").pop() || "Page",
+        description: version.page_description || "Page content",
+        summary: version.page_summary || undefined,
         content: content.slice(0, 5000), // Limit content for API calls
-        title: version.page.url.split("/").pop() || undefined,
       }
     }),
   )
@@ -139,11 +160,7 @@ export async function generateLlmsFullTxt({
   sections.push("")
   sections.push(`> Comprehensive content archive from ${domain}`)
   sections.push("")
-  sections.push("## Metadata")
-  sections.push("")
-  sections.push(`- **Generated:** ${new Date().toISOString()}`)
-  sections.push(`- **Total Pages:** ${pageVersions.length}`)
-  sections.push(`- **Job ID:** ${jobId}`)
+  sections.push(`Generated: ${new Date().toISOString()}`)
   sections.push("")
   sections.push("---")
   sections.push("")
@@ -161,16 +178,13 @@ export async function generateLlmsFullTxt({
     sections.push(...generateTableOfContents(pagesByPath))
   }
 
-  // Add full content from each page organized by category
+  // Add pages organized by category (using database summaries only)
   for (const [category, versions] of Object.entries(pagesByPath)) {
     sections.push(`## ${category}`)
     sections.push("")
 
     for (const version of versions) {
-      const pageContent = await fetchPageContent(version)
-      if (pageContent) {
-        sections.push(...formatPageSection(version, pageContent))
-      }
+      sections.push(...formatPageSection(version))
     }
   }
 
@@ -178,10 +192,10 @@ export async function generateLlmsFullTxt({
   sections.push("## End of Document")
   sections.push("")
   sections.push(
-    `This document contains the complete crawled content from ${domain}.`,
+    `This document contains summaries of all pages from ${domain}.`,
   )
   sections.push(
-    "Use the llms.txt file for a summarized version optimized for LLM consumption.",
+    "Each page includes its title, description, and AI-generated summary.",
   )
 
   return sections.join("\n")
@@ -242,65 +256,30 @@ function generateTableOfContents(
 }
 
 /**
- * Fetch content for a page version from storage
- */
-async function fetchPageContent(
-  version: PageVersionWithPage,
-): Promise<string | null> {
-  if (!version.html_md_blob_url) {
-    return null
-  }
-
-  try {
-    const result = await storage.download(
-      STORAGE_BUCKETS.ARTIFACTS,
-      version.html_md_blob_url,
-    )
-
-    if (result) {
-      return await result.text()
-    }
-  } catch (error) {
-    console.error(`Failed to fetch content for ${version.page.url}:`, error)
-  }
-
-  return null
-}
-
-/**
  * Format a page section for llms-full.txt
  */
 function formatPageSection(
   version: PageVersionWithPage,
-  content: string,
 ): string[] {
   const sections: string[] = []
 
-  try {
-    const urlPath = new URL(version.page.url).pathname
+  const title = version.page_title || version.page.url.split("/").pop() || "Page"
 
-    sections.push(`### ${urlPath || "/"}`)
+  sections.push(`### ${title}`)
+  sections.push("")
+
+  // Use summary if available, otherwise fall back to description
+  if (version.page_summary) {
+    sections.push(version.page_summary)
     sections.push("")
-    sections.push(`**Full URL:** ${version.page.url}`)
-    const createdAt =
-      typeof version.created_at === "string"
-        ? version.created_at
-        : version.created_at.toISOString()
-    sections.push(`**Last Modified:** ${createdAt}`)
-    sections.push("")
-    sections.push(content)
-    sections.push("")
-    sections.push("---")
-    sections.push("")
-  } catch (error) {
-    // Fallback formatting if URL parsing fails
-    sections.push(`### ${version.page.url}`)
-    sections.push("")
-    sections.push(content)
-    sections.push("")
-    sections.push("---")
+  } else if (version.page_description) {
+    // Only show description if no summary exists
+    sections.push(`> ${version.page_description}`)
     sections.push("")
   }
+
+  sections.push("---")
+  sections.push("")
 
   return sections
 }
