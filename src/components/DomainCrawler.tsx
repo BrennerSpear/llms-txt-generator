@@ -1,5 +1,6 @@
 import type React from "react"
 import { useState } from "react"
+import { formatMinutesToHuman } from "~/lib/utils/time"
 
 interface CrawlConfig {
   checkIntervalMinutes: number
@@ -7,7 +8,11 @@ interface CrawlConfig {
   maxPages: number
 }
 
-export function DomainCrawler() {
+interface DomainCrawlerProps {
+  onDomainAdded?: () => void
+}
+
+export function DomainCrawler({ onDomainAdded }: DomainCrawlerProps = {}) {
   const [url, setUrl] = useState("")
   const [config, setConfig] = useState<CrawlConfig>({
     checkIntervalMinutes: 1440,
@@ -41,6 +46,11 @@ export function DomainCrawler() {
 
     if (!url.trim()) {
       setError("Please enter a URL")
+      return
+    }
+
+    if (config.maxPages > 99) {
+      setError("Max pages must be 99 or less")
       return
     }
 
@@ -79,6 +89,10 @@ export function DomainCrawler() {
           openrouterModel: "openai/gpt-4o-mini",
           maxPages: 10,
         })
+        // Trigger refresh of domains table
+        if (onDomainAdded) {
+          onDomainAdded()
+        }
       }
     } catch (err) {
       setError("Network error. Please try again.")
@@ -118,20 +132,27 @@ export function DomainCrawler() {
           >
             Check Interval (minutes)
           </label>
-          <input
-            type="number"
-            id="checkInterval"
-            value={config.checkIntervalMinutes}
-            onChange={(e) =>
-              setConfig({
-                ...config,
-                checkIntervalMinutes: Number.parseInt(e.target.value) || 1440,
-              })
-            }
-            min={1}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading}
-          />
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              id="checkInterval"
+              value={config.checkIntervalMinutes || ""}
+              onChange={(e) =>
+                setConfig({
+                  ...config,
+                  checkIntervalMinutes: Number.parseInt(e.target.value) || 0,
+                })
+              }
+              min={1}
+              className="w-1/2 rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
+            />
+            {config.checkIntervalMinutes > 0 && (
+              <span className="text-gray-600 text-sm">
+                {formatMinutesToHuman(config.checkIntervalMinutes)}
+              </span>
+            )}
+          </div>
         </div>
 
         <div>
@@ -144,17 +165,27 @@ export function DomainCrawler() {
           <input
             type="number"
             id="maxPages"
-            value={config.maxPages}
+            value={config.maxPages || ""}
             onChange={(e) =>
               setConfig({
                 ...config,
-                maxPages: Number.parseInt(e.target.value) || 10,
+                maxPages: Number.parseInt(e.target.value) || 0,
               })
             }
             min={1}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            max={99}
+            className={`w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 ${
+              config.maxPages > 99
+                ? "border-red-500 focus:ring-red-500"
+                : "border-gray-300 focus:ring-blue-500"
+            }`}
             disabled={isLoading}
           />
+          {config.maxPages > 99 && (
+            <p className="mt-1 text-red-600 text-xs">
+              Max pages must be 99 or less
+            </p>
+          )}
         </div>
 
         <div>

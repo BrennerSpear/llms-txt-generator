@@ -101,7 +101,7 @@ async function initializeStorageBuckets(): Promise<void> {
   console.log(`   URL: ${SUPABASE_URL}`)
   console.log("")
 
-  const buckets = [{ name: "artifacts", public: false }]
+  const buckets = [{ name: "artifacts", public: true }]
 
   let hasErrors = false
 

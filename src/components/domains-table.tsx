@@ -2,13 +2,12 @@
 
 import {
   ArrowDownTrayIcon,
-  ArrowPathIcon,
   DocumentTextIcon,
-  PencilIcon,
 } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
-import Link from "next/link"
 import { useEffect, useState } from "react"
+import { downloadFile, getStorageUrl, viewFile } from "~/lib/supabase/storage"
+import { formatMinutesToHuman } from "~/lib/utils/time"
 
 interface Domain {
   id: string
@@ -33,27 +32,29 @@ interface Artifacts {
   llmsFullTxt: { blob_url: string } | null
 }
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+interface DomainsTableProps {
+  onRefreshNeeded?: (refreshFn: () => void) => void
+}
 
-export function DomainsTable() {
+export function DomainsTable({ onRefreshNeeded }: DomainsTableProps = {}) {
   const [domains, setDomains] = useState<Domain[]>([])
   const [loading, setLoading] = useState(true)
   const [artifacts, setArtifacts] = useState<Record<string, Artifacts>>({})
   const [loadingArtifacts, setLoadingArtifacts] = useState<Set<string>>(
     new Set(),
   )
-  const [crawlingDomains, setCrawlingDomains] = useState<Set<string>>(new Set())
-
-  // Helper to construct full Supabase storage URL from path
-  const getStorageUrl = (path: string) => {
-    return `${SUPABASE_URL}/storage/v1/object/public/artifacts/${path}`
-  }
 
   useEffect(() => {
     fetchDomains()
     const interval = setInterval(fetchDomains, 10000) // Poll every 10 seconds
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    if (onRefreshNeeded) {
+      onRefreshNeeded(fetchDomains)
+    }
+  }, [onRefreshNeeded])
 
   const fetchDomains = async () => {
     try {
@@ -97,74 +98,12 @@ export function DomainsTable() {
     }
   }
 
-  const triggerCrawl = async (domain: Domain) => {
-    setCrawlingDomains((prev) => new Set(prev).add(domain.id))
-
+  const handleDownload = async (blobUrl: string, filename: string) => {
     try {
-      const response = await fetch("/api/domains/crawl", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: domain.domain,
-          checkIntervalMinutes: domain.check_interval_minutes,
-          openrouterModel: domain.openrouter_model,
-          promptProfileId: domain.prompt_profile?.name,
-        }),
-      })
-
-      if (response.ok) {
-        // Refresh domains list
-        setTimeout(fetchDomains, 1000)
-      } else {
-        const error = await response.json()
-        console.error("Failed to trigger crawl:", error)
-        alert(`Failed to trigger crawl: ${error.error}`)
-      }
+      await downloadFile(blobUrl, filename)
     } catch (error) {
-      console.error("Failed to trigger crawl:", error)
-      alert("Failed to trigger crawl")
-    } finally {
-      setCrawlingDomains((prev) => {
-        const next = new Set(prev)
-        next.delete(domain.id)
-        return next
-      })
-    }
-  }
-
-  const downloadArtifact = async (blobUrl: string, filename: string) => {
-    try {
-      // Fetch the file content from the blob URL
-      const response = await fetch(blobUrl)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch file: ${response.statusText}`)
-      }
-
-      // Create a blob from the response
-      const blob = await response.blob()
-
-      // Create a temporary URL for the blob
-      const url = window.URL.createObjectURL(blob)
-
-      // Create and trigger download link
-      const link = document.createElement("a")
-      link.href = url
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-
-      // Cleanup
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error("Failed to download artifact:", error)
       alert("Failed to download file. Please try again.")
     }
-  }
-
-  const viewArtifact = (blobUrl: string) => {
-    // Open the Supabase storage URL directly in a new tab
-    window.open(blobUrl, "_blank")
   }
 
   if (loading) {
@@ -203,11 +142,11 @@ export function DomainsTable() {
             <th className="px-6 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
               Interval
             </th>
-            <th className="px-6 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
-              Model
+            <th className="px-6 py-3 text-center font-medium text-gray-500 text-xs uppercase tracking-wider">
+              llms.txt
             </th>
-            <th className="px-6 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
-              Actions
+            <th className="px-6 py-3 text-center font-medium text-gray-500 text-xs uppercase tracking-wider">
+              llms-full.txt
             </th>
           </tr>
         </thead>
@@ -215,12 +154,12 @@ export function DomainsTable() {
           {domains.map((domain) => (
             <tr key={domain.id}>
               <td className="whitespace-nowrap px-6 py-4">
-                <Link
+                <a
                   href={`/domains/${domain.id}`}
                   className="font-medium text-blue-600 hover:text-blue-900"
                 >
                   {domain.domain}
-                </Link>
+                </a>
               </td>
               <td className="whitespace-nowrap px-6 py-4">
                 <span
@@ -238,138 +177,113 @@ export function DomainsTable() {
               </td>
               <td className="whitespace-nowrap px-6 py-4 text-gray-500 text-sm">
                 {domain.lastJob ? (
-                  <div>
+                  domain.lastJob.status === "processing" ? (
+                    <span className="inline-flex animate-pulse rounded bg-blue-100 px-2 py-1 text-blue-800 text-xs">
+                      Processing
+                    </span>
+                  ) : (
                     <div>
-                      {formatDistanceToNow(
-                        new Date(domain.lastJob.started_at),
-                        { addSuffix: true },
-                      )}
-                    </div>
-                    <div className="text-xs">
-                      <span
-                        className={`inline-flex rounded px-1 ${
-                          domain.lastJob.status === "finished"
-                            ? "bg-green-100 text-green-800"
-                            : domain.lastJob.status === "processing"
-                              ? "bg-blue-100 text-blue-800"
-                              : domain.lastJob.status === "failed"
+                      <div>
+                        {formatDistanceToNow(
+                          new Date(domain.lastJob.started_at),
+                          { addSuffix: true },
+                        )}
+                      </div>
+                      {domain.lastJob.status !== "finished" && (
+                        <div className="text-xs">
+                          <span
+                            className={`inline-flex rounded px-1 ${
+                              domain.lastJob.status === "failed"
                                 ? "bg-red-100 text-red-800"
                                 : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {domain.lastJob.status}
-                      </span>
+                            }`}
+                          >
+                            {domain.lastJob.status}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )
                 ) : (
                   "Never"
                 )}
               </td>
               <td className="whitespace-nowrap px-6 py-4 text-gray-900 text-sm">
-                {domain.check_interval_minutes} min
+                {formatMinutesToHuman(domain.check_interval_minutes)}
               </td>
-              <td className="whitespace-nowrap px-6 py-4 text-gray-900 text-sm">
-                {domain.openrouter_model.replace("openai/", "")}
+              <td className="whitespace-nowrap px-6 py-4 text-center">
+                {artifacts[domain.id]?.llmsTxt ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        viewFile(
+                          getStorageUrl(
+                            artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
+                          ),
+                        )
+                      }
+                      className="text-blue-600 hover:text-blue-900"
+                      title="View llms.txt"
+                    >
+                      <DocumentTextIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleDownload(
+                          getStorageUrl(
+                            artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
+                          ),
+                          `${domain.domain}-llms.txt`,
+                        )
+                      }
+                      className="text-blue-600 hover:text-blue-900"
+                      title="Download llms.txt"
+                    >
+                      <ArrowDownTrayIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-gray-400 text-xs">—</span>
+                )}
               </td>
-              <td className="whitespace-nowrap px-6 py-4 font-medium text-sm">
-                <div className="flex items-center space-x-2">
-                  {artifacts[domain.id] && (
-                    <>
-                      {artifacts[domain.id]?.llmsTxt && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              viewArtifact(
-                                getStorageUrl(
-                                  artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
-                                ),
-                              )
-                            }
-                            className="text-blue-600 hover:text-blue-900"
-                            title="View llms.txt"
-                          >
-                            <DocumentTextIcon className="h-5 w-5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void downloadArtifact(
-                                getStorageUrl(
-                                  artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
-                                ),
-                                `${domain.domain}-llms.txt`,
-                              )
-                            }
-                            className="text-blue-600 hover:text-blue-900"
-                            title="Download llms.txt"
-                          >
-                            <ArrowDownTrayIcon className="h-5 w-5" />
-                          </button>
-                        </>
-                      )}
-                      {artifacts[domain.id]?.llmsFullTxt && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              viewArtifact(
-                                getStorageUrl(
-                                  artifacts[domain.id]?.llmsFullTxt?.blob_url ??
-                                    "",
-                                ),
-                              )
-                            }
-                            className="text-green-600 hover:text-green-900"
-                            title="View llms-full.txt"
-                          >
-                            <DocumentTextIcon className="h-5 w-5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void downloadArtifact(
-                                getStorageUrl(
-                                  artifacts[domain.id]?.llmsFullTxt?.blob_url ??
-                                    "",
-                                ),
-                                `${domain.domain}-llms-full.txt`,
-                              )
-                            }
-                            className="text-green-600 hover:text-green-900"
-                            title="Download llms-full.txt"
-                          >
-                            <ArrowDownTrayIcon className="h-5 w-5" />
-                          </button>
-                        </>
-                      )}
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => triggerCrawl(domain)}
-                    disabled={crawlingDomains.has(domain.id)}
-                    className={`${
-                      crawlingDomains.has(domain.id)
-                        ? "cursor-not-allowed text-gray-400"
-                        : "text-blue-600 hover:text-blue-900"
-                    }`}
-                    title="Trigger new crawl"
-                  >
-                    <ArrowPathIcon
-                      className={`h-5 w-5 ${
-                        crawlingDomains.has(domain.id) ? "animate-spin" : ""
-                      }`}
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    className="text-gray-600 hover:text-gray-900"
-                    title="Edit settings"
-                  >
-                    <PencilIcon className="h-5 w-5" />
-                  </button>
-                </div>
+              <td className="whitespace-nowrap px-6 py-4 text-center">
+                {artifacts[domain.id]?.llmsFullTxt ? (
+                  <div className="flex items-center justify-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        viewFile(
+                          getStorageUrl(
+                            artifacts[domain.id]?.llmsFullTxt?.blob_url ?? "",
+                          ),
+                        )
+                      }
+                      className="text-green-600 hover:text-green-900"
+                      title="View llms-full.txt"
+                    >
+                      <DocumentTextIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void handleDownload(
+                          getStorageUrl(
+                            artifacts[domain.id]?.llmsFullTxt?.blob_url ?? "",
+                          ),
+                          `${domain.domain}-llms-full.txt`,
+                        )
+                      }
+                      className="text-green-600 hover:text-green-900"
+                      title="Download llms-full.txt"
+                    >
+                      <ArrowDownTrayIcon className="h-5 w-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-gray-400 text-xs">—</span>
+                )}
               </td>
             </tr>
           ))}

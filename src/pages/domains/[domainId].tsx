@@ -10,6 +10,8 @@ import Head from "next/head"
 import Link from "next/link"
 import { useRouter } from "next/router"
 import { useEffect, useState } from "react"
+import { downloadFile, getStorageUrl, viewFile } from "~/lib/supabase/storage"
+import { formatMinutesToHuman } from "~/lib/utils/time"
 
 interface DomainDetail {
   id: string
@@ -114,19 +116,12 @@ export default function DomainDetailPage() {
     }
   }
 
-  const viewContent = (url: string | null) => {
-    if (url) {
-      window.open(url, "_blank")
+  const handleDownload = async (blobUrl: string, filename: string) => {
+    try {
+      await downloadFile(blobUrl, filename)
+    } catch (error) {
+      alert("Failed to download file. Please try again.")
     }
-  }
-
-  const downloadArtifact = (blobUrl: string, filename: string) => {
-    const link = document.createElement("a")
-    link.href = blobUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
   }
 
   if (loading) {
@@ -184,7 +179,9 @@ export default function DomainDetailPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        viewContent(artifacts.llmsTxt?.blob_url ?? null)
+                        viewFile(
+                          getStorageUrl(artifacts.llmsTxt?.blob_url ?? ""),
+                        )
                       }
                       className="inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-2 font-medium text-gray-700 text-sm shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
@@ -194,8 +191,8 @@ export default function DomainDetailPage() {
                     <button
                       type="button"
                       onClick={() =>
-                        downloadArtifact(
-                          artifacts.llmsTxt?.blob_url ?? "",
+                        void handleDownload(
+                          getStorageUrl(artifacts.llmsTxt?.blob_url ?? ""),
                           `${domain.domain}-llms.txt`,
                         )
                       }
@@ -232,7 +229,7 @@ export default function DomainDetailPage() {
               <div>
                 <span className="text-gray-500">Check Interval:</span>{" "}
                 <span className="font-medium">
-                  {domain.check_interval_minutes} minutes
+                  {formatMinutesToHuman(domain.check_interval_minutes)}
                 </span>
               </div>
               <div>
@@ -278,8 +275,11 @@ export default function DomainDetailPage() {
                       <th className="px-6 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
                         Versions
                       </th>
-                      <th className="px-6 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
-                        Actions
+                      <th className="px-6 py-3 text-center font-medium text-gray-500 text-xs uppercase tracking-wider">
+                        Raw
+                      </th>
+                      <th className="px-6 py-3 text-center font-medium text-gray-500 text-xs uppercase tracking-wider">
+                        Summarized
                       </th>
                     </tr>
                   </thead>
@@ -288,12 +288,13 @@ export default function DomainDetailPage() {
                       const latestVersion = page.page_versions[0]
                       return (
                         <tr key={page.id}>
-                          <td className="whitespace-nowrap px-6 py-4">
+                          <td className="max-w-md truncate px-6 py-4">
                             <a
                               href={page.url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-blue-600 text-sm hover:text-blue-900"
+                              title={page.url}
                             >
                               {page.url}
                             </a>
@@ -311,33 +312,45 @@ export default function DomainDetailPage() {
                           <td className="whitespace-nowrap px-6 py-4 text-gray-900 text-sm">
                             {page.page_versions.length}
                           </td>
-                          <td className="whitespace-nowrap px-6 py-4 font-medium text-sm">
-                            <div className="flex items-center space-x-3">
-                              {latestVersion?.raw_md_blob_url && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    viewContent(latestVersion.raw_md_blob_url)
-                                  }
-                                  className="text-blue-600 hover:text-blue-900"
-                                  title="View raw markdown"
-                                >
-                                  <DocumentTextIcon className="h-5 w-5" />
-                                </button>
-                              )}
-                              {latestVersion?.html_md_blob_url && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    viewContent(latestVersion.html_md_blob_url)
-                                  }
-                                  className="text-green-600 hover:text-green-900"
-                                  title="View HTML markdown"
-                                >
-                                  <DocumentTextIcon className="h-5 w-5" />
-                                </button>
-                              )}
-                            </div>
+                          <td className="whitespace-nowrap px-6 py-4 text-center">
+                            {latestVersion?.raw_md_blob_url ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  viewFile(
+                                    getStorageUrl(
+                                      latestVersion.raw_md_blob_url ?? "",
+                                    ),
+                                  )
+                                }
+                                className="text-blue-600 hover:text-blue-900"
+                                title="View raw markdown"
+                              >
+                                <DocumentTextIcon className="h-5 w-5" />
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="whitespace-nowrap px-6 py-4 text-center">
+                            {latestVersion?.html_md_blob_url ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  viewFile(
+                                    getStorageUrl(
+                                      latestVersion.html_md_blob_url ?? "",
+                                    ),
+                                  )
+                                }
+                                className="text-green-600 hover:text-green-900"
+                                title="View summarized markdown"
+                              >
+                                <DocumentTextIcon className="h-5 w-5" />
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-xs">—</span>
+                            )}
                           </td>
                         </tr>
                       )
