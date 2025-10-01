@@ -153,36 +153,146 @@ async function runIntegrationTest() {
       await wait(5000)
     }
 
-    // Step 5: Wait for processing
-    console.log("\nStep 5: Waiting for processing to complete...")
-    await wait(5000) // Give Inngest time to process
+    // Step 5: Wait for all pages to be processed (F3)
+    console.log("\nStep 5: Waiting for pages to be processed (F3)...")
+    let pagesProcessed = false
+    let pollAttempts = 0
+    const maxPollAttempts = 30 // 30 seconds max
 
-    // Step 6: Check final status (if we have a job ID)
-    if (jobId) {
-      console.log("\nStep 6: Checking final job status...")
-      const finalStatus = await apiCall(`/api/jobs/${jobId}`)
+    while (!pagesProcessed && pollAttempts < maxPollAttempts) {
+      await wait(1000)
+      pollAttempts++
 
-      console.log("📊 Final Job Status:")
-      console.log(`   Status: ${finalStatus.job.status}`)
-      console.log(`   Pages Total: ${finalStatus.pages.total}`)
-      console.log(`   Pages Changed: ${finalStatus.pages.changed}`)
-      console.log(`   Pages Skipped: ${finalStatus.pages.skipped}`)
-      console.log(`   Duration: ${finalStatus.job.duration || "still running"}`)
+      const status = await apiCall(`/api/jobs/${jobId}`)
+      const processedCount = status.pages?.total || 0
 
-      // Check page details
-      if (finalStatus.pages?.list?.length > 0) {
-        console.log("\n📄 Page Processing Results:")
-        for (const page of finalStatus.pages.list) {
-          console.log(`   - ${page.url}`)
-          if (page.latestVersion) {
-            console.log(`     Changed: ${page.latestVersion.changedEnough}`)
-            console.log(`     Reason: ${page.latestVersion.reason}`)
-          }
+      if (processedCount > 0) {
+        console.log(`   Pages processed: ${processedCount}`)
+        if (processedCount >= 9) {
+          // Expecting ~10 pages, 90% threshold
+          pagesProcessed = true
+          console.log("✅ Pages processing complete")
         }
       }
     }
 
-    console.log("\n✅ Integration test completed successfully!")
+    // Step 6: Wait for F4 (Handle Crawl Completed) to trigger
+    console.log("\nStep 6: Waiting for crawl completion handler (F4)...")
+    console.log("   F4 should trigger when crawl.completed webhook is received")
+    await wait(3000) // Give time for webhook to be processed
+
+    // Step 7: Wait for F5 (Assemble Artifacts) and F6 (Finalize Job)
+    console.log(
+      "\nStep 7: Waiting for artifact assembly (F5) and finalization (F6)...",
+    )
+    let jobFinalized = false
+    let finalPollAttempts = 0
+    const maxFinalPolls = 40 // 40 seconds max for F4->F5->F6 chain
+
+    while (!jobFinalized && finalPollAttempts < maxFinalPolls) {
+      await wait(1000)
+      finalPollAttempts++
+
+      const status = await apiCall(`/api/jobs/${jobId}`)
+
+      if (status.job.status === "finished") {
+        jobFinalized = true
+        console.log("✅ Job finalized successfully")
+
+        // Verify F5 created artifacts
+        if (status.artifacts && status.artifacts.length > 0) {
+          console.log(`✅ F5 created ${status.artifacts.length} artifacts:`)
+          for (const artifact of status.artifacts) {
+            console.log(`   - ${artifact.kind}: ${artifact.id}`)
+          }
+        } else {
+          console.log("⚠️  No artifacts found (F5 may not have created any)")
+        }
+
+        // Verify F6 added final stats
+        if (status.job.stats) {
+          console.log("✅ F6 added final statistics:")
+          const stats = status.job.stats as any
+          if (stats.durationMinutes) {
+            console.log(`   - Duration: ${stats.durationMinutes} minutes`)
+          }
+          if (stats.totalPagesProcessed !== undefined) {
+            console.log(`   - Pages processed: ${stats.totalPagesProcessed}`)
+          }
+          if (stats.changedPages !== undefined) {
+            console.log(`   - Changed pages: ${stats.changedPages}`)
+          }
+          if (stats.artifactsGenerated !== undefined) {
+            console.log(`   - Artifacts generated: ${stats.artifactsGenerated}`)
+          }
+          if (stats.finalizedAt) {
+            console.log(`   - Finalized at: ${stats.finalizedAt}`)
+          }
+        }
+        break
+      }
+      if (status.job.status === "failed") {
+        console.log("❌ Job failed")
+        throw new Error(`Job failed: ${JSON.stringify(status.job.stats)}`)
+      }
+      if (finalPollAttempts % 5 === 0) {
+        console.log(
+          `   Job status: ${status.job.status} (attempt ${finalPollAttempts}/${maxFinalPolls})`,
+        )
+      }
+    }
+
+    if (!jobFinalized) {
+      console.log("⚠️  Job did not finalize within timeout")
+      console.log("   This could mean F4, F5, or F6 didn't complete")
+    }
+
+    // Step 8: Final verification
+    console.log("\nStep 8: Final verification...")
+    const finalStatus = await apiCall(`/api/jobs/${jobId}`)
+
+    console.log("📊 Final Job Summary:")
+    console.log(`   Status: ${finalStatus.job.status}`)
+    console.log(`   Pages Total: ${finalStatus.pages.total}`)
+    console.log(`   Pages Changed: ${finalStatus.pages.changed}`)
+    console.log(`   Pages Skipped: ${finalStatus.pages.skipped}`)
+    console.log(`   Artifacts: ${finalStatus.artifacts?.length || 0}`)
+
+    // Verify the complete pipeline executed
+    const pipelineComplete =
+      finalStatus.job.status === "finished" &&
+      finalStatus.pages.total > 0 &&
+      (finalStatus.artifacts?.length > 0 || finalStatus.pages.changed === 0)
+
+    if (pipelineComplete) {
+      console.log("\n✅ Complete pipeline verified:")
+      console.log("   ✓ F1: Crawl started")
+      console.log("   ✓ F2: Pages received via webhooks")
+      console.log("   ✓ F3: Pages processed and analyzed")
+      console.log("   ✓ F4: Crawl completion handled")
+      console.log("   ✓ F5: Artifacts assembled")
+      console.log("   ✓ F6: Job finalized")
+    } else {
+      console.log("\n⚠️  Pipeline may not have completed all stages")
+      console.log(`   Job status: ${finalStatus.job.status}`)
+      if (finalStatus.job.status === "processing") {
+        console.log("   Pipeline might still be running or stuck")
+      }
+    }
+
+    // Check page details
+    if (finalStatus.pages?.list?.length > 0) {
+      console.log("\n📄 Sample Page Processing Results (first 3):")
+      for (const page of finalStatus.pages.list.slice(0, 3)) {
+        console.log(`   - ${page.url}`)
+        if (page.latestVersion) {
+          console.log(`     Changed: ${page.latestVersion.changedEnough}`)
+          console.log(`     Reason: ${page.latestVersion.reason}`)
+        }
+      }
+    }
+
+    console.log("\n✅ Integration test completed!")
 
     // Return success
     return {
