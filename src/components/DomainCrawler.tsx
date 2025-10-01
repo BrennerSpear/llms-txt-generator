@@ -1,4 +1,5 @@
-import React, { useState } from "react"
+import type React from "react"
+import { useState } from "react"
 
 interface CrawlConfig {
   checkIntervalMinutes: number
@@ -21,7 +22,10 @@ export function DomainCrawler() {
 
   const normalizeDomain = (inputUrl: string): string => {
     let normalized = inputUrl.trim().toLowerCase()
-    if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+    if (
+      !normalized.startsWith("http://") &&
+      !normalized.startsWith("https://")
+    ) {
       normalized = `https://${normalized}`
     }
     try {
@@ -88,11 +92,14 @@ export function DomainCrawler() {
   }
 
   return (
-    <div className="w-full max-w-2xl p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6">Domain Crawler</h2>
+    <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-md">
+      <h2 className="mb-6 font-bold text-2xl">Domain Crawler</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="url"
+            className="mb-1 block font-medium text-gray-700 text-sm"
+          >
             URL
           </label>
           <input
@@ -101,90 +108,123 @@ export function DomainCrawler() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="tryprofound.com"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-gray-500 text-xs">
             Domain will be automatically normalized
           </p>
         </div>
 
         <div>
-          <label htmlFor="checkInterval" className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="checkInterval"
+            className="mb-1 block font-medium text-gray-700 text-sm"
+          >
             Check Interval (minutes)
           </label>
           <input
             type="number"
             id="checkInterval"
             value={config.checkIntervalMinutes}
-            onChange={(e) => setConfig({ ...config, checkIntervalMinutes: parseInt(e.target.value) || 1440 })}
+            onChange={(e) =>
+              setConfig({
+                ...config,
+                checkIntervalMinutes: Number.parseInt(e.target.value) || 1440,
+              })
+            }
             min={1}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
         </div>
 
         <div>
-          <label htmlFor="openrouterModel" className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="openrouterModel"
+            className="mb-1 block font-medium text-gray-700 text-sm"
+          >
             OpenRouter Model
           </label>
           <input
             type="text"
             id="openrouterModel"
             value={config.openrouterModel}
-            onChange={(e) => setConfig({ ...config, openrouterModel: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(e) =>
+              setConfig({ ...config, openrouterModel: e.target.value })
+            }
+            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
         </div>
 
         <div>
-          <label htmlFor="maxPages" className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="maxPages"
+            className="mb-1 block font-medium text-gray-700 text-sm"
+          >
             Max Pages
           </label>
           <input
             type="number"
             id="maxPages"
             value={config.maxPages}
-            onChange={(e) => setConfig({ ...config, maxPages: parseInt(e.target.value) || 10 })}
+            onChange={(e) =>
+              setConfig({
+                ...config,
+                maxPages: Number.parseInt(e.target.value) || 10,
+              })
+            }
             min={1}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
         </div>
 
         <div>
-          <label htmlFor="promptProfileId" className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="promptProfileId"
+            className="mb-1 block font-medium text-gray-700 text-sm"
+          >
             Prompt Profile ID (optional)
           </label>
           <input
             type="text"
             id="promptProfileId"
             value={config.promptProfileId || ""}
-            onChange={(e) => setConfig({ ...config, promptProfileId: e.target.value || undefined })}
+            onChange={(e) =>
+              setConfig({
+                ...config,
+                promptProfileId: e.target.value || undefined,
+              })
+            }
             placeholder="Select a prompt profile"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={isLoading}
           />
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-gray-500 text-xs">
             Leave empty to use default prompt
           </p>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-sm text-red-600">{error}</p>
+          <div className="rounded-md border border-red-200 bg-red-50 p-3">
+            <p className="text-red-600 text-sm">{error}</p>
           </div>
         )}
 
         {success && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-sm text-green-600">
+          <div className="rounded-md border border-green-200 bg-green-50 p-3">
+            <p className="text-green-600 text-sm">
               Crawl initiated successfully!
               {success.jobId && (
                 <>
-                  {" "}Job ID:{" "}
-                  <a href={`/jobs/${success.jobId}`} className="underline font-medium">
+                  {" "}
+                  Job ID:{" "}
+                  <a
+                    href={`/jobs/${success.jobId}`}
+                    className="font-medium underline"
+                  >
                     {success.jobId}
                   </a>
                 </>
@@ -196,7 +236,7 @@ export function DomainCrawler() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400"
         >
           {isLoading ? "Initiating Crawl..." : "Start Crawl"}
         </button>
