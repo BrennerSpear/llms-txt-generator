@@ -1,19 +1,27 @@
 import Head from "next/head"
 import Link from "next/link"
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { DomainCrawler } from "~/components/DomainCrawler"
+import { RecrawlModal } from "~/components/RecrawlModal"
 import { DomainsTable } from "~/components/domains-table"
 
 export default function Home() {
   const [refreshDomains, setRefreshDomains] = useState<(() => void) | null>(
     null,
   )
+  const [showRecrawlModal, setShowRecrawlModal] = useState(false)
 
-  const handleRefreshNeeded = (refreshFn: () => void) => {
+  const handleRefreshNeeded = useCallback((refreshFn: () => void) => {
     setRefreshDomains(() => refreshFn)
-  }
+  }, [])
 
   const handleDomainAdded = () => {
+    if (refreshDomains) {
+      refreshDomains()
+    }
+  }
+
+  const handleRecrawlComplete = () => {
     if (refreshDomains) {
       refreshDomains()
     }
@@ -46,14 +54,28 @@ export default function Home() {
         {/* Main Content */}
         <main className="container mx-auto px-4 py-8">
           <div className="rounded-lg bg-white shadow-sm">
-            <div className="border-gray-200 border-b px-6 py-4">
+            <div className="flex items-center justify-between border-gray-200 border-b px-6 py-4">
               <h2 className="font-semibold text-gray-900 text-lg">
                 Crawled Domains
               </h2>
+              <button
+                type="button"
+                onClick={() => setShowRecrawlModal(true)}
+                className="rounded-md bg-blue-600 px-4 py-2 font-medium text-sm text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Check Recrawls
+              </button>
             </div>
             <DomainsTable onRefreshNeeded={handleRefreshNeeded} />
           </div>
         </main>
+
+        {showRecrawlModal && (
+          <RecrawlModal
+            onClose={() => setShowRecrawlModal(false)}
+            onComplete={handleRecrawlComplete}
+          />
+        )}
       </div>
     </>
   )

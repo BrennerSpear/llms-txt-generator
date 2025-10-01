@@ -5,7 +5,7 @@ import {
   DocumentTextIcon,
 } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { downloadFile, getStorageUrl, viewFile } from "~/lib/supabase/storage"
 import { formatMinutesToHuman } from "~/lib/utils/time"
 
@@ -44,19 +44,7 @@ export function DomainsTable({ onRefreshNeeded }: DomainsTableProps = {}) {
     new Set(),
   )
 
-  useEffect(() => {
-    fetchDomains()
-    const interval = setInterval(fetchDomains, 10000) // Poll every 10 seconds
-    return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
-    if (onRefreshNeeded) {
-      onRefreshNeeded(fetchDomains)
-    }
-  }, [onRefreshNeeded])
-
-  const fetchDomains = async () => {
+  const fetchDomains = useCallback(async () => {
     try {
       const response = await fetch("/api/domains")
       if (response.ok) {
@@ -65,8 +53,14 @@ export function DomainsTable({ onRefreshNeeded }: DomainsTableProps = {}) {
 
         // Fetch artifacts for domains that have finished jobs
         for (const domain of data) {
-          if (domain.lastJob?.status === "finished" && !artifacts[domain.id]) {
-            fetchArtifacts(domain.id)
+          if (domain.lastJob?.status === "finished") {
+            setArtifacts((prevArtifacts) => {
+              // Only fetch if we don't already have artifacts for this domain
+              if (!prevArtifacts[domain.id]) {
+                fetchArtifacts(domain.id)
+              }
+              return prevArtifacts
+            })
           }
         }
       }
@@ -75,7 +69,19 @@ export function DomainsTable({ onRefreshNeeded }: DomainsTableProps = {}) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    fetchDomains()
+    const interval = setInterval(fetchDomains, 2000) // Poll every 2 seconds
+    return () => clearInterval(interval)
+  }, [fetchDomains])
+
+  useEffect(() => {
+    if (onRefreshNeeded) {
+      onRefreshNeeded(fetchDomains)
+    }
+  }, [onRefreshNeeded, fetchDomains])
 
   const fetchArtifacts = async (domainId: string) => {
     if (loadingArtifacts.has(domainId)) return
