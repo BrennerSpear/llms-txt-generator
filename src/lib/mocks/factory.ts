@@ -570,19 +570,17 @@ export function generateMockPageVersion(
   jobId: string,
   overrides?: Record<string, unknown>,
 ) {
-  const fingerprint = `fp_${Math.random().toString(36).slice(2)}`
+  const randomId = Math.random().toString(36).slice(2)
   return {
-    id: `version_${Math.random().toString(36).slice(2)}`,
+    id: `version_${randomId}`,
     page_id: pageId,
     job_id: jobId,
-    url: `https://example.com/page-${Math.random().toString(36).slice(2)}`,
-    raw_md_blob_url: `https://storage.example.com/raw/${fingerprint}.md`,
-    html_md_blob_url: `https://storage.example.com/html/${fingerprint}.html`,
-    content_fingerprint: fingerprint,
-    prev_fingerprint: null,
-    similarity_score: null,
-    changed_enough: true,
+    url: `https://example.com/page-${randomId}`,
+    raw_md_blob_url: `https://storage.example.com/raw/${randomId}.md`,
+    html_md_blob_url: `https://storage.example.com/html/${randomId}.html`,
+    change_status: null,
     reason: "Initial version",
+    semantic_importance: null,
     created_at: new Date(),
     ...overrides,
   }

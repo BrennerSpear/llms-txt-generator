@@ -84,16 +84,12 @@ model PageVersion {
     url                 String
     raw_md_blob_url     String?
     html_md_blob_url    String?
-    content_fingerprint String
-    prev_fingerprint    String?
-    similarity_score    Float?
-    changed_enough      Boolean
-    change_status       String?  // "same", "updated", etc from Firecrawl
-    reason              String?
+    change_status       String?  // "same", "updated", etc from Firecrawl (may deprecate later)
+    reason              String?  // Human-readable reason for change/no-change decision
+    semantic_importance Int?     @db.SmallInt // 1-4 scale (null = unchanged/no diff)
     created_at          DateTime @default(now())
 
     @@index([page_id, created_at(sort: Desc)])
-    @@index([content_fingerprint])
 }
 
 model Artifact {

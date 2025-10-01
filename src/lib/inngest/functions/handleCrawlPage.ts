@@ -14,7 +14,7 @@ export const handleCrawlPage = inngest.createFunction(
     id: "handle-crawl-page",
     name: "Handle Crawl Page",
     concurrency: {
-      limit: 50, // Allow processing multiple pages in parallel
+      limit: 5, // Allow processing multiple pages in parallel
     },
     throttle: {
       limit: 100,

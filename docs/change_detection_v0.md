@@ -315,7 +315,8 @@ if (semanticAnalysis.score >= 2) {
 
 **Location**: `prisma/schema.prisma`
 
-### Remove Deprecated Change Detection Fields
+
+### Remove Deprecated Change Detection Fields (Step 0)
 
 **IMPORTANT**: Remove the following fields from `PageVersion` model as they are no longer needed with the new diff-based change detection:
 
@@ -517,25 +518,11 @@ Consider adding future domain-level settings:
 
 ## Testing Approach
 
-### Unit Tests
-
-1. **Diff Generation** (`src/lib/utils/diff.test.ts`)
-   - Test identical content (no changes)
-   - Test additions only
-   - Test deletions only
-   - Test mixed changes
-   - Test whitespace normalization
-
-2. **OpenRouter Change Evaluation** (manual testing initially)
-   - Test with various diff sizes
-   - Verify score range (1-4)
-   - Test with edge cases (empty diffs, huge diffs)
-
 ### Integration Tests
 
 Update `test/integration-tests/crawl-pipeline.test.ts`:
 
-1. **No Changes Scenario**
+<!-- 1. **No Changes Scenario**
    - Crawl same content twice
    - Verify second crawl skips AI processing
    - Verify version created with score=null, changedEnough=false
@@ -550,30 +537,10 @@ Update `test/integration-tests/crawl-pipeline.test.ts`:
    - Crawl with substantial content updates
    - Verify AI evaluation returns score >= 3
    - Verify full enhancement pipeline runs
-   - Verify version created with appropriate score
+   - Verify version created with appropriate score -->
 
 ## Performance Considerations
 
-### Cost Optimization
-
-1. **Early Exit on No Changes**: Saves ~$0.001 per unchanged page (OpenRouter call avoided)
-2. **Cheap Model for Evaluation**: Use `gpt-4o-mini` (~$0.0001 per evaluation)
-3. **Skip Enhancement on Score=1**: Saves ~$0.001 per trivial change
-
-Estimated savings for typical crawl with 100 pages:
-- 80 unchanged pages: $0.08 saved
-- 15 minor changes (score=1): $0.015 saved
-- 5 significant changes: Full processing
-
-Total savings: ~$0.095 per 100-page crawl (~50% reduction in API costs)
-
-### Throughput
-
-- Diff generation: < 100ms per page (in-memory operation)
-- AI evaluation: ~200-500ms per page (cheap model, small prompt)
-- Overall: Adds ~300-600ms per changed page, saves ~1-2s per unchanged page
-
-Net result: **Improved overall throughput** due to early exits
 
 ## Migration Strategy
 
@@ -596,24 +563,11 @@ Net result: **Improved overall throughput** due to early exits
 Add logging for:
 1. Change detection decisions: `no_change`, `score_1`, `score_2`, `score_3`, `score_4`
 2. Processing time per step (diff, evaluation, enhancement)
-3. Cost per page (track AI call counts)
-4. False positives/negatives (manual review initially)
 
 Add to job completion summary:
 - Total pages: unchanged / score=1 / score=2+ / new
 - Cost savings from skipped processing
 - Average time per page
-
-## Future Enhancements
-
-### V1 Improvements (Future Consideration)
-
-1. **Diff Storage**: Store actual diff text in database for debugging/audit
-2. **Smart Diffing**: Ignore common noise (timestamps, version numbers, etc.)
-3. **Batch Evaluation**: Send multiple diffs to LLM in one call for efficiency
-4. **Custom Importance Prompts**: Allow per-domain evaluation criteria
-5. **Change Classification**: Categorize changes (content, structure, code, etc.)
-6. **Diff Visualization**: UI component to show changes between versions
 
 ## Dependencies
 
@@ -632,31 +586,3 @@ Install: `pnpm add diff`
 ```bash
 pnpm add -D @types/diff
 ```
-
-## Rollback Plan
-
-If issues arise:
-
-1. **Immediate**: Set `changeDetection: true` in Firecrawl config to re-enable their detection
-2. **Database**: `semantic_importance` field is optional, old code continues working
-3. **Code**: Keep existing fingerprint-based detection as fallback
-
-No data loss risk - all content still stored, just processing logic changes.
-
-## Success Criteria
-
-1. **Accuracy**: > 95% of "unchanged" pages are correctly identified
-2. **Cost**: > 40% reduction in OpenRouter API costs for typical crawls
-3. **Performance**: No increase in average page processing time
-4. **Reliability**: < 1% error rate in semantic evaluation (score out of range)
-
-## Open Questions
-
-1. **Diff Size Limit**: Should we truncate very large diffs before sending to LLM? (Suggested: 4000 tokens max)
-2. **Score Calibration**: Will scores 1-4 need adjustment based on real-world data?
-3. **Storage of Diffs**: Should we persist diff text for debugging/audit? (Not in V0)
-4. **Batch Processing**: Can we evaluate multiple diffs in parallel for efficiency gains?
-
-## Document History
-
-- **2025-10-01**: Initial V0 specification created

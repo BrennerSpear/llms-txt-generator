@@ -7,7 +7,7 @@ export const handleCrawlCompleted = inngest.createFunction(
     id: "handle-crawl-completed",
     name: "F4 - Handle Crawl Completed",
     concurrency: {
-      limit: 100,
+      limit: 5,
     },
     retries: 3,
   },

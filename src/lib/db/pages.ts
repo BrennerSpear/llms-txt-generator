@@ -89,12 +89,9 @@ export const pageService = {
     url: string
     rawMdBlobUrl?: string
     htmlMdBlobUrl?: string
-    contentFingerprint: string
-    prevFingerprint?: string
-    similarityScore?: number
-    changedEnough: boolean
     changeStatus?: string
     reason?: string
+    semanticImportance?: number | null
   }): Promise<PageVersion> {
     return prisma.pageVersion.create({
       data: {
@@ -103,12 +100,9 @@ export const pageService = {
         url: data.url,
         raw_md_blob_url: data.rawMdBlobUrl,
         html_md_blob_url: data.htmlMdBlobUrl,
-        content_fingerprint: data.contentFingerprint,
-        prev_fingerprint: data.prevFingerprint,
-        similarity_score: data.similarityScore,
-        changed_enough: data.changedEnough,
         change_status: data.changeStatus,
         reason: data.reason,
+        semantic_importance: data.semanticImportance,
       },
     })
   },
@@ -124,9 +118,9 @@ export const pageService = {
   },
 
   /**
-   * Get previous version by fingerprint
+   * Get previous version for a page (for change detection)
    */
-  async getPreviousVersionByFingerprint(
+  async getPreviousVersion(
     domainId: string,
     url: string,
   ): Promise<PageVersion | null> {
@@ -150,7 +144,7 @@ export const pageService = {
   },
 
   /**
-   * Get changed pages for a job
+   * Get changed pages for a job (semantic_importance >= 2 or null for backward compatibility)
    */
   async getChangedPagesForJob(jobId: string): Promise<
     (PageVersion & {
@@ -160,7 +154,10 @@ export const pageService = {
     return prisma.pageVersion.findMany({
       where: {
         job_id: jobId,
-        changed_enough: true,
+        OR: [
+          { semantic_importance: null },
+          { semantic_importance: { gte: 2 } },
+        ],
       },
       include: {
         page: true,
@@ -201,13 +198,16 @@ export const pageService = {
       prisma.pageVersion.count({
         where: {
           job_id: jobId,
-          changed_enough: true,
+          OR: [
+            { semantic_importance: null },
+            { semantic_importance: { gte: 2 } },
+          ],
         },
       }),
       prisma.pageVersion.count({
         where: {
           job_id: jobId,
-          changed_enough: false,
+          semantic_importance: { lt: 2 },
         },
       }),
     ])
@@ -225,12 +225,9 @@ export const pageService = {
       url: string
       rawMdBlobUrl?: string
       htmlMdBlobUrl?: string
-      contentFingerprint: string
-      prevFingerprint?: string
-      similarityScore?: number
-      changedEnough: boolean
       changeStatus?: string
       reason?: string
+      semanticImportance?: number | null
     }>,
   ): Promise<Prisma.BatchPayload> {
     return prisma.pageVersion.createMany({
@@ -240,12 +237,9 @@ export const pageService = {
         url: v.url,
         raw_md_blob_url: v.rawMdBlobUrl,
         html_md_blob_url: v.htmlMdBlobUrl,
-        content_fingerprint: v.contentFingerprint,
-        prev_fingerprint: v.prevFingerprint,
-        similarity_score: v.similarityScore,
-        changed_enough: v.changedEnough,
         change_status: v.changeStatus,
         reason: v.reason,
+        semantic_importance: v.semanticImportance,
       })),
     })
   },
