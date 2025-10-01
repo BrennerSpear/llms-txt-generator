@@ -27,7 +27,15 @@ export const processUrl = inngest.createFunction(
   },
   { event: "page/process.requested" },
   async ({ event, step }) => {
-    const { pageId, jobId, domainUrl, url, rawContent, rawMdPath } = event.data
+    const {
+      pageId,
+      jobId,
+      domainUrl,
+      url,
+      rawContent,
+      rawMdPath,
+      changeStatus,
+    } = event.data
 
     // Step 1: Get job and domain information for processing context
     const { domainInfo, job } = await step.run("get-context", async () => {
@@ -198,6 +206,7 @@ export const processUrl = inngest.createFunction(
         prevFingerprint: comparison.prevFingerprint ?? undefined,
         similarityScore: comparison.similarityScore,
         changedEnough: comparison.changed,
+        changeStatus, // Store the changeStatus from Firecrawl
         reason: comparison.reason,
       })
     })

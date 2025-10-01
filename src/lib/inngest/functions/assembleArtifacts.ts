@@ -1,5 +1,6 @@
 import { NonRetriableError } from "inngest"
 import { db } from "~/lib/db"
+import { generateLlmsFullTxt, generateLlmsTxt } from "~/lib/llms-txt"
 import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
 import { getLlmsFullTxtPath, getLlmsTxtPath } from "~/lib/storage/paths"
 import { inngest } from "../client"
@@ -17,28 +18,63 @@ export const assembleArtifacts = inngest.createFunction(
   async ({ event, step }) => {
     const { jobId, domainId, completedPages } = event.data
 
-    // Step 1: Collect all page versions for the job
-    const pageVersions = await step.run("collect-page-versions", async () => {
-      const versions = await db.page.getChangedPagesForJob(jobId)
+    // Step 1: Check all page versions' changeStatus
+    const shouldGenerate = await step.run("check-change-status", async () => {
+      // Get ALL page versions for the job to check their changeStatus
+      const allVersions = await db.page.getAllPageVersionsForJob(jobId)
 
-      if (versions.length === 0) {
+      // Check if all pages have changeStatus === "same"
+      const allSame = allVersions.every(
+        (version) => version.change_status === "same",
+      )
+
+      if (allSame && allVersions.length > 0) {
+        console.log(
+          `Job ${jobId}: All ${allVersions.length} pages have changeStatus="same", skipping artifact generation`,
+        )
+        return false
+      }
+
+      // Filter for changed pages from the versions we already fetched
+      const changedVersions = allVersions.filter(
+        (version) => version.changed_enough === true,
+      )
+
+      if (changedVersions.length === 0) {
         console.log(`Job ${jobId}: No changed pages to assemble`)
-        return []
+        return false
       }
 
       console.log(
-        `Job ${jobId}: Found ${versions.length} changed pages to assemble`,
+        `Job ${jobId}: Found ${changedVersions.length} changed pages to assemble`,
       )
-      return versions
+      return true
     })
+
+    // If all pages have changeStatus="same", skip artifact generation
+    if (!shouldGenerate) {
+      // Still emit finalization event but with no artifacts
+      await step.sendEvent("emit-finalize-event", {
+        name: "job/finalize.requested",
+        data: {
+          jobId,
+          domainId,
+          artifactIds: [],
+        },
+      })
+
+      return {
+        jobId,
+        artifactsCreated: 0,
+        artifactIds: [],
+        changedPages: 0,
+        skippedReason: "All pages have changeStatus=same",
+      }
+    }
 
     // Step 2: Build llms.txt content
     const llmsTxtContent = await step.run("build-llms-txt", async () => {
-      if (pageVersions.length === 0) {
-        return null
-      }
-
-      // Get domain info for header
+      // Get domain info
       const job = await db.job.getById(jobId)
 
       if (!job) {
@@ -53,47 +89,33 @@ export const assembleArtifacts = inngest.createFunction(
         throw new NonRetriableError(`Job has been canceled: ${jobId}`)
       }
 
-      const domain = job.domain
+      // Re-fetch changed pages for this step
+      const changedPageVersions = await db.page.getChangedPagesForJob(jobId)
 
-      // Build header (simplified version, no prompt profile for now)
-      const header = `# ${domain.domain}\n\nAI-readable content extracted from ${domain.domain}\n\n`
-
-      // Collect summaries from each page
-      const summaries: string[] = []
-
-      for (const version of pageVersions) {
-        // For now, we'll use a basic format
-        // In production, this would call OpenRouter for actual summarization
-        const pageUrl = version.page.url
-        const pageTitle = pageUrl.split("/").pop() || "page"
-
-        // Mock summary for now
-        const summary = `## ${pageTitle}\nURL: ${pageUrl}\nContent from ${domain.domain}`
-        summaries.push(summary)
+      if (changedPageVersions.length === 0) {
+        return null
       }
 
-      // Assemble final content
-      const content = [
-        header,
-        `Generated: ${new Date().toISOString()}`,
-        `Pages processed: ${pageVersions.length}`,
-        "",
-        "---",
-        "",
-        ...summaries,
-      ].join("\n")
+      try {
+        const content = await generateLlmsTxt({
+          domain: job.domain.domain,
+          pageVersions: changedPageVersions,
+          jobId,
+        })
 
-      return content
+        return content
+      } catch (error) {
+        console.error("Failed to generate llms.txt:", error)
+        throw new NonRetriableError(
+          `Failed to generate llms.txt: ${error instanceof Error ? error.message : "Unknown error"}`,
+        )
+      }
     })
 
     // Step 3: Build llms-full.txt content
     const llmsFullTxtContent = await step.run(
       "build-llms-full-txt",
       async () => {
-        if (pageVersions.length === 0) {
-          return null
-        }
-
         // Get domain info
         const job = await db.job.getById(jobId)
 
@@ -101,41 +123,27 @@ export const assembleArtifacts = inngest.createFunction(
           throw new NonRetriableError(`Job not found: ${jobId}`)
         }
 
-        const sections: string[] = []
+        // Re-fetch changed pages for this step
+        const changedPageVersions = await db.page.getChangedPagesForJob(jobId)
 
-        // Add header
-        sections.push(`# Full Content - ${job.domain.domain}`)
-        sections.push(`Generated: ${new Date().toISOString()}`)
-        sections.push(`Total pages: ${pageVersions.length}\n`)
-        sections.push("---\n")
-
-        // Add full content from each page
-        for (const version of pageVersions) {
-          if (version.html_md_blob_url) {
-            try {
-              // Download the processed content from storage
-              // html_md_blob_url now contains the full path within the artifacts bucket
-              const result = await storage.download(
-                STORAGE_BUCKETS.ARTIFACTS,
-                version.html_md_blob_url,
-              )
-
-              if (result) {
-                const content = await result.text()
-                sections.push(`## ${version.page.url}`)
-                sections.push(content)
-                sections.push("\n---\n")
-              }
-            } catch (error) {
-              console.error(
-                `Failed to fetch content for ${version.page.url}:`,
-                error,
-              )
-            }
-          }
+        if (changedPageVersions.length === 0) {
+          return null
         }
 
-        return sections.join("\n")
+        try {
+          const content = await generateLlmsFullTxt({
+            domain: job.domain.domain,
+            pageVersions: changedPageVersions,
+            jobId,
+          })
+
+          return content
+        } catch (error) {
+          console.error("Failed to generate llms-full.txt:", error)
+          throw new NonRetriableError(
+            `Failed to generate llms-full.txt: ${error instanceof Error ? error.message : "Unknown error"}`,
+          )
+        }
       },
     )
 
@@ -148,6 +156,12 @@ export const assembleArtifacts = inngest.createFunction(
       if (!job) {
         throw new NonRetriableError(`Job not found: ${jobId}`)
       }
+
+      // Get next version numbers for each artifact type
+      const [llmsTxtVersion, llmsFullTxtVersion] = await Promise.all([
+        db.artifact.getNextVersion(domainId, "llms_txt"),
+        db.artifact.getNextVersion(domainId, "llms_full_txt"),
+      ])
 
       if (llmsTxtContent) {
         // Store llms.txt
@@ -163,14 +177,15 @@ export const assembleArtifacts = inngest.createFunction(
         )
 
         if (uploadResult) {
-          // Create artifact record
+          // Create artifact record with proper version
           const artifact = await db.artifact.create({
             jobId,
             kind: "llms_txt",
             blobUrl: llmsTxtPath,
-            version: 1,
+            version: llmsTxtVersion,
           })
           ids.push(artifact.id)
+          console.log(`Created llms_txt artifact version ${llmsTxtVersion}`)
         }
       }
 
@@ -188,14 +203,17 @@ export const assembleArtifacts = inngest.createFunction(
         )
 
         if (uploadResult) {
-          // Create artifact record
+          // Create artifact record with proper version
           const artifact = await db.artifact.create({
             jobId,
             kind: "llms_full_txt",
             blobUrl: llmsFullPath,
-            version: 1,
+            version: llmsFullTxtVersion,
           })
           ids.push(artifact.id)
+          console.log(
+            `Created llms_full_txt artifact version ${llmsFullTxtVersion}`,
+          )
         }
       }
 
@@ -213,11 +231,17 @@ export const assembleArtifacts = inngest.createFunction(
       },
     })
 
+    // Count the changed pages
+    const changedPageCount = await step.run("count-changed-pages", async () => {
+      const changedVersions = await db.page.getChangedPagesForJob(jobId)
+      return changedVersions.length
+    })
+
     return {
       jobId,
       artifactsCreated: artifactIds.length,
       artifactIds,
-      changedPages: pageVersions.length,
+      changedPages: changedPageCount,
     }
   },
 )

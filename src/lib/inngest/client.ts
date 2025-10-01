@@ -59,6 +59,7 @@ type PageProcessRequested = {
     rawContent: string
     rawMdPath: string // Path where raw markdown from Firecrawl is stored
     changeTracking?: Record<string, unknown>
+    changeStatus?: string // "same", "updated", etc from Firecrawl
   }
 }
 
