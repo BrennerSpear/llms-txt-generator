@@ -89,13 +89,15 @@ export class WebhookSimulator {
         type: "crawl.page",
         jobId,
         timestamp: new Date().toISOString(),
-        data: [{
-          ...page,
-          changeTracking: {
-            hasChanges: true, // Assume all provided pages have changes
-            tag: "test",
+        data: [
+          {
+            ...page,
+            changeTracking: {
+              hasChanges: true, // Assume all provided pages have changes
+              tag: "test",
+            },
           },
-        }],
+        ],
       })
 
       console.log(`📄 Sent custom page ${i + 1}/${pages.length}: ${pageUrl}`)

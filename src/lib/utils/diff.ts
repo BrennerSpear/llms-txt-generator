@@ -48,7 +48,8 @@ export function generateContentDiff(
   // Calculate change percentage
   const totalLines = additions + deletions + unchanged
   const changedLines = additions + deletions
-  const changePercentage = totalLines > 0 ? (changedLines / totalLines) * 100 : 0
+  const changePercentage =
+    totalLines > 0 ? (changedLines / totalLines) * 100 : 0
 
   return {
     hasChanges: additions > 0 || deletions > 0,
@@ -63,12 +64,10 @@ export function generateContentDiff(
  * Normalize content for consistent diff generation
  */
 function normalizeForDiff(content: string): string {
-  return (
-    content
-      .replace(/\r\n/g, "\n") // Normalize line endings
-      .replace(/\t/g, "  ") // Normalize tabs to spaces
-      .trim()
-  )
+  return content
+    .replace(/\r\n/g, "\n") // Normalize line endings
+    .replace(/\t/g, "  ") // Normalize tabs to spaces
+    .trim()
 }
 
 /**

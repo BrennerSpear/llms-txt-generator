@@ -238,6 +238,80 @@ Return ONLY a single integer (1, 2, 3, or 4). No explanation.`
       throw new Error(`Failed to parse OpenRouter response as JSON: ${error}`)
     }
   }
+
+  /**
+   * Generate page summary with structured output
+   * Returns description (always) and summary (if enough content)
+   */
+  async generatePageSummary(
+    content: string,
+    metadata?: {
+      title?: string
+      description?: string
+      [key: string]: unknown
+    },
+    model = "openai/gpt-4o-mini",
+  ): Promise<{ description: string; summary: string }> {
+    const prompt = `Analyze this page content and provide:
+1. A one-line description (50-100 characters) that captures the essence of the page
+2. If there's substantial content, a one-paragraph summary (200-500 characters)
+
+${metadata?.title ? `Page title: ${metadata.title}` : ""}
+${metadata?.description ? `Existing description: ${metadata.description}` : ""}
+
+Page content:
+${content.substring(0, 8000)} ${content.length > 8000 ? "...[truncated]" : ""}
+
+Return as JSON with "description" and "summary" fields.
+If the content is too brief or lacks substance, return empty string for "summary".`
+
+    const response = await this.createChatCompletion({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a documentation summarizer that creates concise, informative descriptions and summaries.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      response_format: { type: "json_object" },
+    })
+
+    const result = response.choices[0]?.message?.content
+    if (!result) {
+      // Fallback if no response
+      return {
+        description: "Page content",
+        summary: "",
+      }
+    }
+
+    try {
+      const parsed = JSON.parse(result) as {
+        description?: string
+        summary?: string
+      }
+
+      // Validate and sanitize the response
+      return {
+        description: (parsed.description || "Page content").substring(0, 100),
+        summary: (parsed.summary || "").substring(0, 500),
+      }
+    } catch (error) {
+      console.error("Failed to parse page summary response:", error)
+      // Fallback on parse error
+      return {
+        description: "Page content",
+        summary: "",
+      }
+    }
+  }
 }
 
 /**
@@ -351,6 +425,29 @@ class OpenRouterClientWrapper {
     }
     // Fallback for mock
     return {} as T
+  }
+
+  /**
+   * Generate page summary - delegates to mock or real client
+   */
+  async generatePageSummary(
+    content: string,
+    metadata?: {
+      title?: string
+      description?: string
+      [key: string]: unknown
+    },
+    model = "openai/gpt-4o-mini",
+  ): Promise<{ description: string; summary: string }> {
+    if ("generatePageSummary" in this.client) {
+      return await this.client.generatePageSummary(content, metadata, model)
+    }
+    // Fallback for mock - generate simple summary
+    const firstLine = content.split("\n")[0] || "Page content"
+    return {
+      description: firstLine.substring(0, 100),
+      summary: content.length > 500 ? content.substring(0, 500) : "",
+    }
   }
 }
 

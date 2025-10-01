@@ -2,7 +2,7 @@ import { db } from "~/lib/db"
 import { openRouter } from "~/lib/openrouter/client"
 import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
 import { getProcessedPagePath } from "~/lib/storage/paths"
-import { cleanContent } from "~/lib/utils/cleaning"
+import { cleanContent, extractTitleFromContent } from "~/lib/utils/cleaning"
 import { generateContentDiff } from "~/lib/utils/diff"
 import { inngest, sendEvent } from "../client"
 
@@ -122,7 +122,35 @@ export const processUrl = inngest.createFunction(
       }
     })
 
-    // Step 4: Check if content changed - early exit if no changes
+    // Step 4: Generate page summary (always run, even for unchanged content)
+    const pageSummary = await step.run("generate-page-summary", async () => {
+      console.log(
+        `[processUrl] Step 4: Generating page summary for URL: ${url}`,
+      )
+
+      const model = domainInfo.openrouter_model || "openai/gpt-4o-mini"
+      const summaryData = await openRouter.generatePageSummary(
+        cleanedContent,
+        metadata,
+        model,
+      )
+
+      const title = metadata?.title || extractTitleFromContent(cleanedContent)
+
+      console.log(`[processUrl] Generated summary - Title: ${title}`)
+      console.log(
+        `[processUrl] Description length: ${summaryData.description.length}`,
+      )
+      console.log(`[processUrl] Summary length: ${summaryData.summary.length}`)
+
+      return {
+        title,
+        description: summaryData.description,
+        summary: summaryData.summary,
+      }
+    })
+
+    // Step 5: Check if content changed - early exit if no changes
     if (
       !diffAnalysis.isNew &&
       diffAnalysis.diff &&
@@ -157,6 +185,10 @@ export const processUrl = inngest.createFunction(
             changeStatus,
             semanticImportance: null, // null = no changes
             reason: "No changes detected in diff",
+            // Add new metadata fields
+            pageTitle: pageSummary.title,
+            pageDescription: pageSummary.description,
+            pageSummary: pageSummary.summary,
           })
         },
       )
@@ -196,12 +228,12 @@ export const processUrl = inngest.createFunction(
       }
     }
 
-    // Step 5: Evaluate semantic importance of changes
+    // Step 6: Evaluate semantic importance of changes
     const semanticAnalysis = await step.run(
       "evaluate-change-importance",
       async () => {
         console.log(
-          `[processUrl] Step 5: Evaluating semantic importance for URL: ${url}`,
+          `[processUrl] Step 6: Evaluating semantic importance for URL: ${url}`,
         )
 
         if (diffAnalysis.isNew) {
@@ -228,38 +260,35 @@ export const processUrl = inngest.createFunction(
       },
     )
 
-    // Step 6: Conditional enhancement based on semantic importance score
+    // Step 7: Conditional enhancement based on semantic importance score
     // Only enhance/summarize if score >= 2
     let processedContent: string | null = null
 
     if (semanticAnalysis.score >= 2) {
-      processedContent = await step.run(
-        "enhance-content",
-        async () => {
-          console.log(
-            `[processUrl] Step 6: Enhancing content for URL: ${url} (score: ${semanticAnalysis.score})`,
-          )
+      processedContent = await step.run("enhance-content", async () => {
+        console.log(
+          `[processUrl] Step 7: Enhancing content for URL: ${url} (score: ${semanticAnalysis.score})`,
+        )
 
-          // Enhance with OpenRouter using domain-specific settings
-          const systemPrompt =
-            domainInfo.prompt_profile?.summary_prompt || undefined
-          const model = domainInfo.openrouter_model || "openai/gpt-4o-mini"
+        // Enhance with OpenRouter using domain-specific settings
+        const systemPrompt =
+          domainInfo.prompt_profile?.summary_prompt || undefined
+        const model = domainInfo.openrouter_model || "openai/gpt-4o-mini"
 
-          console.log(`[processUrl] Using model: ${model}`)
-          console.log(`[processUrl] Has custom prompt: ${!!systemPrompt}`)
+        console.log(`[processUrl] Using model: ${model}`)
+        console.log(`[processUrl] Has custom prompt: ${!!systemPrompt}`)
 
-          // Use OpenRouter to process the content
-          console.log("[processUrl] Calling OpenRouter.processPageContent...")
-          const enhanced = await openRouter.processPageContent(
-            cleanedContent,
-            systemPrompt,
-            model,
-          )
-          console.log("[processUrl] OpenRouter processing complete")
+        // Use OpenRouter to process the content
+        console.log("[processUrl] Calling OpenRouter.processPageContent...")
+        const enhanced = await openRouter.processPageContent(
+          cleanedContent,
+          systemPrompt,
+          model,
+        )
+        console.log("[processUrl] OpenRouter processing complete")
 
-          return enhanced
-        },
-      )
+        return enhanced
+      })
     } else {
       // Score = 1: Skip expensive enhancement
       await step.run("skip-enhancement", async () => {
@@ -269,7 +298,7 @@ export const processUrl = inngest.createFunction(
       })
     }
 
-    // Step 7: Store content to storage
+    // Step 8: Store content to storage
     const storagePaths = await step.run("store-content", async () => {
       const processedPath = getProcessedPagePath(
         domainUrl,
@@ -298,7 +327,7 @@ export const processUrl = inngest.createFunction(
       }
     })
 
-    // Step 8: Create page version record
+    // Step 9: Create page version record
     const pageVersion = await step.run("create-page-version", async () => {
       return await db.page.createVersion({
         pageId,
@@ -309,15 +338,19 @@ export const processUrl = inngest.createFunction(
         changeStatus, // Store the changeStatus from Firecrawl
         reason: semanticAnalysis.reason,
         semanticImportance: semanticAnalysis.score,
+        // Add new metadata fields
+        pageTitle: pageSummary.title,
+        pageDescription: pageSummary.description,
+        pageSummary: pageSummary.summary,
       })
     })
 
-    // Step 9: Update page's last known version
+    // Step 10: Update page's last known version
     await step.run("update-last-known-version", async () => {
       await db.page.updateLastKnownVersion(pageId, pageVersion.id)
     })
 
-    // Step 10: Increment pages processed counter
+    // Step 11: Increment pages processed counter
     const updatedJob = await step.run("increment-pages-processed", async () => {
       const job = await db.job.incrementPagesProcessed(jobId)
       const enhancementStatus = processedContent
@@ -340,7 +373,7 @@ export const processUrl = inngest.createFunction(
       return job
     })
 
-    // Step 11: Emit page processed event
+    // Step 12: Emit page processed event
     await step.run("emit-page-processed", async () => {
       await sendEvent("page/processed", {
         pageId,
