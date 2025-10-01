@@ -222,7 +222,7 @@ Example format:
   }
 
   /**
-   * Generate the complete llms.txt content
+   * Generate the complete llms.txt content using structured format
    */
   async generateLlmsTxt(
     domain: string,
@@ -237,93 +237,73 @@ Example format:
     // Generate site overview
     const overview = await this.generateSiteOverview(domain, pages)
 
-    // Process pages - use existing summaries or generate new ones
-    const pagesWithSummaries = await Promise.all(
-      pages.map(async (page) => {
-        // Use existing summary if available, otherwise generate one
-        const effectiveSummary =
-          page.summary || (await this.summarizePage(page.url, page.content))
+    // Build context about all pages for the AI
+    const pagesContext = pages
+      .map(
+        (p) => `
+- Title: ${p.title}
+  URL: ${p.url}
+  Description: ${p.description}
+  ${p.summary ? `Summary: ${p.summary}` : ""}`,
+      )
+      .join("\n")
 
-        const depth = page.url.split("/").length - 3 // Approximate depth
-        const score = await this.scorePage(page.url, page.content, depth)
+    // Create the structured prompt for formatting the entire site
+    const llmsTxtPrompt = `Format the following website content according to the llms.txt specification.
 
-        return {
-          ...page,
-          summary: effectiveSummary,
-          score,
-        }
-      }),
-    )
+Domain: ${domain}
 
-    // Sort by score (importance)
-    pagesWithSummaries.sort((a, b) => b.score - a.score)
+Site Overview:
+${overview}
 
-    // Categorize pages
-    const categories = await this.categorizePages(pagesWithSummaries)
+All pages on this site:
+${pagesContext}
 
-    // Build the llms.txt content
-    const sections: string[] = []
+Output format requirements:
+1. Start with main title using # (domain name)
+2. Add site description using > quote syntax
+3. Include relevant details about the site in plain text
+4. Create ## sections for major topics/categories
+5. Use - [Link title](url) format for links with brief descriptions
+6. Add an optional "## Optional" section at the end for less critical pages
 
-    // Header
-    sections.push(`# ${domain}`)
-    sections.push("")
-    sections.push(overview)
-    sections.push("")
-    sections.push("---")
-    sections.push("")
+Example format:
+# ${domain}
 
-    // Table of contents
-    if (Object.keys(categories).length > 1) {
-      sections.push("## Contents")
-      sections.push("")
-      for (const category of Object.keys(categories)) {
-        sections.push(
-          `- [${category}](#${category.toLowerCase().replace(/\s+/g, "-")})`,
-        )
-      }
-      sections.push("")
-      sections.push("---")
-      sections.push("")
-    }
+> One-line site description goes here
 
-    // Category sections
-    for (const [category, categoryPages] of Object.entries(categories)) {
-      if (categoryPages.length === 0) continue
+Key details and context about the site.
 
-      sections.push(`## ${category}`)
-      sections.push("")
+## Main Section
 
-      for (const page of categoryPages) {
-        const pagePath = page.url.replace(/^https?:\/\/[^\/]+/, "")
+- [Page Title](https://example.com/page): Brief description of this page
+- [Another Page](https://example.com/other): Description of what this page contains
 
-        // Use the page title from metadata
-        sections.push(`### ${page.title}`)
+## Optional
 
-        // Add description as a quote
-        if (page.description) {
-          sections.push(`> ${page.description}`)
-          sections.push("")
-        }
+- [Additional Resource](https://example.com/resource): Less critical content
 
-        sections.push(`**URL:** ${page.url}`)
-        sections.push("")
+Generate the llms.txt content following this exact structure. Be concise but informative.
+Organize pages into logical sections based on their purpose and content.`
 
-        // Add the summary (either from DB or generated)
-        if (page.summary) {
-          sections.push(page.summary)
-          sections.push("")
-        }
-      }
+    const response = await this.makeRequest({
+      model: "openai/gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an expert at creating llms.txt files - structured documentation optimized for LLM consumption. Format content clearly and concisely.",
+        },
+        {
+          role: "user",
+          content: llmsTxtPrompt,
+        },
+      ],
+      temperature: 0.3,
+      max_tokens: 4000,
+    })
 
-      sections.push("---")
-      sections.push("")
-    }
-
-    // Footer
-    sections.push(`Generated: ${new Date().toISOString()}`)
-    sections.push(`Total pages processed: ${pages.length}`)
-
-    return sections.join("\n")
+    return response.choices[0]?.message.content || ""
   }
 }
 

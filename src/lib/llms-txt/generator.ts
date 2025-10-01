@@ -188,16 +188,6 @@ export async function generateLlmsFullTxt({
     }
   }
 
-  // Add footer
-  sections.push("## End of Document")
-  sections.push("")
-  sections.push(
-    `This document contains summaries of all pages from ${domain}.`,
-  )
-  sections.push(
-    "Each page includes its title, description, and AI-generated summary.",
-  )
-
   return sections.join("\n")
 }
 
@@ -258,12 +248,11 @@ function generateTableOfContents(
 /**
  * Format a page section for llms-full.txt
  */
-function formatPageSection(
-  version: PageVersionWithPage,
-): string[] {
+function formatPageSection(version: PageVersionWithPage): string[] {
   const sections: string[] = []
 
-  const title = version.page_title || version.page.url.split("/").pop() || "Page"
+  const title =
+    version.page_title || version.page.url.split("/").pop() || "Page"
 
   sections.push(`### ${title}`)
   sections.push("")
