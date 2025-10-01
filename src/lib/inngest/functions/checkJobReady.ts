@@ -11,7 +11,7 @@ export const checkJobReady = inngest.createFunction(
     id: "check-job-ready",
     name: "Check Job Ready for Assembly",
     concurrency: {
-      limit: 50,
+      limit: 5,
     },
   },
   { event: "page/processed" },

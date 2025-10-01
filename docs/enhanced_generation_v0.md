@@ -342,22 +342,6 @@ async function migrateExistingSummaries() {
 }
 ```
 
-## 6. Success Metrics
-
-### Quality Metrics
-- Description coverage: 100% of pages have descriptions
-- Summary coverage: >70% of content-rich pages have summaries
-- llms.txt readability: Human-reviewable output quality
-
-### Performance Metrics
-- Summary generation: <500ms per page
-- llms.txt generation: <10s for 100-page site
-- API costs: <$0.01 per page for summaries
-
-### Accuracy Metrics
-- Title extraction: 95% match with actual page titles
-- Description relevance: Manual QA scoring >4/5
-- Summary completeness: Captures key points from content
 
 ## 7. Example Output
 

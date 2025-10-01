@@ -3,17 +3,11 @@ import { openRouter } from "~/lib/openrouter/client"
 import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
 import { getProcessedPagePath } from "~/lib/storage/paths"
 import { cleanContent } from "~/lib/utils/cleaning"
-import {
-  calculateSimilarity,
-  generateFingerprint,
-  hasChangedEnough,
-} from "~/lib/utils/fingerprint"
 import { inngest, sendEvent } from "../client"
 
 /**
  * F3 - Process Single URL Function
  * Processes a single page: uses OpenRouter to enhance content,
- * computes fingerprint, compares with previous version,
  * and stores version metadata
  */
 export const processUrl = inngest.createFunction(
@@ -21,7 +15,7 @@ export const processUrl = inngest.createFunction(
     id: "process-url",
     name: "Process Single URL",
     concurrency: {
-      limit: 20, // Process up to 20 pages in parallel
+      limit: 5, // Process up to 20 pages in parallel
     },
     retries: 3,
   },
@@ -103,77 +97,7 @@ export const processUrl = inngest.createFunction(
       },
     )
 
-    // Step 3: Generate content fingerprint
-    const fingerprint = await step.run("generate-fingerprint", async () => {
-      return generateFingerprint(processedContent)
-    })
-
-    // Step 4: Find and compare with previous version
-    const comparison = await step.run("compare-with-previous", async () => {
-      // Get previous version for this URL
-      const previousVersion = await db.page.getPreviousVersionByFingerprint(
-        domainInfo.id,
-        url,
-      )
-
-      if (!previousVersion) {
-        // First time seeing this page
-        return {
-          isNew: true,
-          prevFingerprint: null,
-          similarityScore: 0,
-          changed: true,
-          reason: "New page - first time crawled",
-        }
-      }
-
-      // Skip if content hasn't changed at all
-      if (previousVersion.content_fingerprint === fingerprint) {
-        return {
-          isNew: false,
-          prevFingerprint: previousVersion.content_fingerprint,
-          similarityScore: 1.0,
-          changed: false,
-          reason: "Content unchanged - identical fingerprint",
-        }
-      }
-
-      // Calculate similarity if fingerprints differ
-      // For now, we'll need to fetch the previous content from storage
-      let previousContent = ""
-      try {
-        if (previousVersion.raw_md_blob_url) {
-          // raw_md_blob_url now contains the full path within the artifacts bucket
-          const blob = await storage.download(
-            STORAGE_BUCKETS.ARTIFACTS,
-            previousVersion.raw_md_blob_url,
-          )
-          if (blob) {
-            previousContent = await blob.text()
-          }
-        }
-      } catch (error) {
-        console.error("Failed to fetch previous content for comparison:", error)
-      }
-
-      const similarityScore = previousContent
-        ? calculateSimilarity(processedContent, previousContent)
-        : 0
-
-      const changeAnalysis = hasChangedEnough(similarityScore, {
-        threshold: 0.95, // 95% similarity threshold
-      })
-
-      return {
-        isNew: false,
-        prevFingerprint: previousVersion.content_fingerprint,
-        similarityScore,
-        changed: changeAnalysis.changed,
-        reason: changeAnalysis.reason,
-      }
-    })
-
-    // Step 5: Store cleaned/processed content to storage
+    // Step 3: Store cleaned/processed content to storage
     const storagePaths = await step.run("store-processed-content", async () => {
       // Store OpenRouter-processed markdown
       const processedPath = getProcessedPagePath(
@@ -194,7 +118,7 @@ export const processUrl = inngest.createFunction(
       }
     })
 
-    // Step 6: Create page version record
+    // Step 4: Create page version record
     const pageVersion = await step.run("create-page-version", async () => {
       return await db.page.createVersion({
         pageId,
@@ -202,23 +126,18 @@ export const processUrl = inngest.createFunction(
         url,
         rawMdBlobUrl: storagePaths.rawPath, // Markdown directly from Firecrawl
         htmlMdBlobUrl: storagePaths.processedPath, // OpenRouter-processed version
-        contentFingerprint: fingerprint,
-        prevFingerprint: comparison.prevFingerprint ?? undefined,
-        similarityScore: comparison.similarityScore,
-        changedEnough: comparison.changed,
         changeStatus, // Store the changeStatus from Firecrawl
-        reason: comparison.reason,
+        reason: "Processed with OpenRouter",
+        semanticImportance: null, // Will be set by change detection later
       })
     })
 
-    // Step 7: Update page's last known version if content changed
-    if (comparison.changed) {
-      await step.run("update-last-known-version", async () => {
-        await db.page.updateLastKnownVersion(pageId, pageVersion.id)
-      })
-    }
+    // Step 5: Update page's last known version
+    await step.run("update-last-known-version", async () => {
+      await db.page.updateLastKnownVersion(pageId, pageVersion.id)
+    })
 
-    // Step 8: Increment pages processed counter
+    // Step 6: Increment pages processed counter
     const updatedJob = await step.run("increment-pages-processed", async () => {
       const job = await db.job.incrementPagesProcessed(jobId)
       console.log(`   ✅ Processed page: ${url}`)
@@ -236,17 +155,15 @@ export const processUrl = inngest.createFunction(
       return job
     })
 
-    // Step 9: Emit page processed event
+    // Step 7: Emit page processed event
     await step.run("emit-page-processed", async () => {
       await sendEvent("page/processed", {
         pageId,
         versionId: pageVersion.id,
         jobId,
         url,
-        fingerprint,
-        changedEnough: comparison.changed,
-        similarityScore: comparison.similarityScore,
-        reason: comparison.reason,
+        semanticImportance: null,
+        reason: "Processed with OpenRouter",
       })
     })
 
@@ -255,11 +172,8 @@ export const processUrl = inngest.createFunction(
       pageId,
       versionId: pageVersion.id,
       url,
-      fingerprint,
-      isNew: comparison.isNew,
-      changed: comparison.changed,
-      similarityScore: comparison.similarityScore,
-      reason: comparison.reason,
+      semanticImportance: null,
+      reason: "Processed with OpenRouter",
     }
   },
 )

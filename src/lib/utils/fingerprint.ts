@@ -1,8 +1,18 @@
 import crypto from "node:crypto"
 
 /**
+ * @deprecated This file is no longer used as of the change detection v0 implementation.
+ * Fingerprint-based change detection has been replaced with diff-based detection
+ * using semantic importance scoring. This file is kept for backward compatibility
+ * but should not be used in new code.
+ *
+ * See docs/change_detection_v0.md for the new implementation.
+ */
+
+/**
  * Generate a fingerprint for content
  * Used to detect changes between versions
+ * @deprecated Use diff-based change detection instead
  */
 export function generateFingerprint(content: string): string {
   // Normalize content before hashing
@@ -18,6 +28,7 @@ export function generateFingerprint(content: string): string {
 /**
  * Calculate similarity score between two pieces of content
  * Returns a value between 0 and 1 (1 = identical)
+ * @deprecated Use diff-based change detection instead
  */
 export function calculateSimilarity(
   content1: string,
@@ -53,6 +64,7 @@ export function calculateSimilarity(
 
 /**
  * Determine if content has changed enough to warrant processing
+ * @deprecated Use diff-based change detection with semantic importance scoring instead
  */
 export function hasChangedEnough(
   similarityScore: number,

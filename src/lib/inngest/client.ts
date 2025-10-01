@@ -69,9 +69,7 @@ type PageProcessed = {
     versionId: string
     jobId: string
     url: string
-    fingerprint: string
-    changedEnough: boolean
-    similarityScore?: number
+    semanticImportance: number | null
     reason?: string
   }
 }

@@ -10,7 +10,7 @@ export const assembleArtifacts = inngest.createFunction(
     id: "assemble-artifacts",
     name: "F5 - Assemble Artifacts",
     concurrency: {
-      limit: 20,
+      limit: 5,
     },
     retries: 3,
   },
@@ -35,18 +35,22 @@ export const assembleArtifacts = inngest.createFunction(
         return false
       }
 
-      // Filter for changed pages from the versions we already fetched
+      // Filter for changed pages with semantic_importance >= 2
+      // null or undefined semantic_importance means the page should be included (backward compatibility)
       const changedVersions = allVersions.filter(
-        (version) => version.changed_enough === true,
+        (version) =>
+          version.semantic_importance === null ||
+          version.semantic_importance === undefined ||
+          version.semantic_importance >= 2,
       )
 
       if (changedVersions.length === 0) {
-        console.log(`Job ${jobId}: No changed pages to assemble`)
+        console.log(`Job ${jobId}: No significantly changed pages to assemble`)
         return false
       }
 
       console.log(
-        `Job ${jobId}: Found ${changedVersions.length} changed pages to assemble`,
+        `Job ${jobId}: Found ${changedVersions.length} pages to assemble`,
       )
       return true
     })

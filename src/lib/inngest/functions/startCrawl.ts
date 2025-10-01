@@ -13,7 +13,7 @@ export const startCrawl = inngest.createFunction(
     id: "start-crawl",
     name: "Start Domain Crawl",
     concurrency: {
-      limit: 10, // Global limit on concurrent crawls
+      limit: 5, // Global limit on concurrent crawls (matches plan limit)
       key: "event.data.domainId", // Per-domain concurrency limit of 1
     },
     retries: 3,

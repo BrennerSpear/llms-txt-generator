@@ -7,7 +7,7 @@ export const finalizeJob = inngest.createFunction(
     id: "finalize-job",
     name: "F6 - Finalize Job",
     concurrency: {
-      limit: 50,
+      limit: 5,
     },
     retries: 3,
   },
@@ -33,20 +33,23 @@ export const finalizeJob = inngest.createFunction(
       // Count unique pages
       const uniquePages = new Set(job.page_versions.map((v) => v.page_id)).size
 
-      // Count pages with significant changes
+      // Count pages with significant changes (semantic_importance >= 2)
       const changedPagesCount = job.page_versions.filter(
-        (v) => v.changed_enough,
+        (v) =>
+          v.semantic_importance === null ||
+          v.semantic_importance === undefined ||
+          v.semantic_importance >= 2,
       ).length
 
-      // Calculate average similarity score
-      const similarityScores = job.page_versions
-        .filter((v) => v.similarity_score !== null)
-        .map((v) => v.similarity_score as number)
+      // Calculate average semantic importance
+      const semanticImportanceScores = job.page_versions
+        .filter((v) => v.semantic_importance !== null)
+        .map((v) => v.semantic_importance as number)
 
-      const avgSimilarity =
-        similarityScores.length > 0
-          ? similarityScores.reduce((a, b) => a + b, 0) /
-            similarityScores.length
+      const avgSemanticImportance =
+        semanticImportanceScores.length > 0
+          ? semanticImportanceScores.reduce((a, b) => a + b, 0) /
+            semanticImportanceScores.length
           : null
 
       return {
@@ -58,8 +61,8 @@ export const finalizeJob = inngest.createFunction(
         totalPagesProcessed: job.page_versions.length,
         uniquePages,
         changedPages: changedPagesCount,
-        averageSimilarity: avgSimilarity
-          ? Math.round(avgSimilarity * 100) / 100
+        averageSemanticImportance: avgSemanticImportance
+          ? Math.round(avgSemanticImportance * 100) / 100
           : null,
         artifactsGenerated: artifactIds.length,
         completionRate: 100,
