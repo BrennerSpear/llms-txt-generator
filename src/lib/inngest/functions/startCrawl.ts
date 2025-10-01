@@ -58,6 +58,8 @@ export const startCrawl = inngest.createFunction(
       const domain = validation.domain
       const webhookUrl = `${env.FIRECRAWL_WEBHOOK_URL}/api/webhooks/firecrawl`
 
+      // Note: We use our own diff-based change detection (see docs/change_detection_v0.md)
+      // Firecrawl's change tracking is disabled by default (enableFirecrawlChangeTracking=false)
       const result = await startDomainCrawl(
         `https://${domain.domain}`,
         domain.check_interval_minutes,
