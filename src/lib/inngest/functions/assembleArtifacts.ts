@@ -94,16 +94,16 @@ export const assembleArtifacts = inngest.createFunction(
       }
 
       // Re-fetch changed pages for this step
-      const changedPageVersions = await db.page.getChangedPagesForJob(jobId)
+      const newestVersionOfPages = await db.page.getAllPageVersionsForJob(jobId)
 
-      if (changedPageVersions.length === 0) {
+      if (newestVersionOfPages.length === 0) {
         return null
       }
 
       try {
         const content = await generateLlmsTxt({
           domain: job.domain.domain,
-          pageVersions: changedPageVersions,
+          pageVersions: newestVersionOfPages,
           jobId,
         })
 
@@ -128,16 +128,17 @@ export const assembleArtifacts = inngest.createFunction(
         }
 
         // Re-fetch changed pages for this step
-        const changedPageVersions = await db.page.getChangedPagesForJob(jobId)
+        const newestVersionOfPages =
+          await db.page.getAllPageVersionsForJob(jobId)
 
-        if (changedPageVersions.length === 0) {
+        if (newestVersionOfPages.length === 0) {
           return null
         }
 
         try {
           const content = await generateLlmsFullTxt({
             domain: job.domain.domain,
-            pageVersions: changedPageVersions,
+            pageVersions: newestVersionOfPages,
             jobId,
           })
 
