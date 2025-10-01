@@ -33,6 +33,8 @@ interface Artifacts {
   llmsFullTxt: { blob_url: string } | null
 }
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
+
 export function DomainsTable() {
   const [domains, setDomains] = useState<Domain[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,6 +43,11 @@ export function DomainsTable() {
     new Set(),
   )
   const [crawlingDomains, setCrawlingDomains] = useState<Set<string>>(new Set())
+
+  // Helper to construct full Supabase storage URL from path
+  const getStorageUrl = (path: string) => {
+    return `${SUPABASE_URL}/storage/v1/object/public/artifacts/${path}`
+  }
 
   useEffect(() => {
     fetchDomains()
@@ -274,7 +281,9 @@ export function DomainsTable() {
                             type="button"
                             onClick={() =>
                               viewArtifact(
-                                artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
+                                getStorageUrl(
+                                  artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
+                                ),
                               )
                             }
                             className="text-blue-600 hover:text-blue-900"
@@ -286,7 +295,9 @@ export function DomainsTable() {
                             type="button"
                             onClick={() =>
                               void downloadArtifact(
-                                artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
+                                getStorageUrl(
+                                  artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
+                                ),
                                 `${domain.domain}-llms.txt`,
                               )
                             }
@@ -303,8 +314,10 @@ export function DomainsTable() {
                             type="button"
                             onClick={() =>
                               viewArtifact(
-                                artifacts[domain.id]?.llmsFullTxt?.blob_url ??
-                                  "",
+                                getStorageUrl(
+                                  artifacts[domain.id]?.llmsFullTxt?.blob_url ??
+                                    "",
+                                ),
                               )
                             }
                             className="text-green-600 hover:text-green-900"
@@ -316,8 +329,10 @@ export function DomainsTable() {
                             type="button"
                             onClick={() =>
                               void downloadArtifact(
-                                artifacts[domain.id]?.llmsFullTxt?.blob_url ??
-                                  "",
+                                getStorageUrl(
+                                  artifacts[domain.id]?.llmsFullTxt?.blob_url ??
+                                    "",
+                                ),
                                 `${domain.domain}-llms-full.txt`,
                               )
                             }
