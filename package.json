@@ -28,6 +28,8 @@
     "@prisma/client": "^6.5.0",
     "@supabase/supabase-js": "^2.58.0",
     "@t3-oss/env-nextjs": "^0.12.0",
+    "@types/diff": "^8.0.0",
+    "diff": "^8.0.2",
     "firecrawl": "^4.3.6",
     "inngest": "^3.44.0",
     "next": "^15.2.3",

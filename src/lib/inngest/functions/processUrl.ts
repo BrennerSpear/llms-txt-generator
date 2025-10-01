@@ -3,6 +3,7 @@ import { openRouter } from "~/lib/openrouter/client"
 import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
 import { getProcessedPagePath } from "~/lib/storage/paths"
 import { cleanContent } from "~/lib/utils/cleaning"
+import { generateContentDiff } from "~/lib/utils/diff"
 import { inngest, sendEvent } from "../client"
 
 /**
@@ -59,21 +60,137 @@ export const processUrl = inngest.createFunction(
       return { domainInfo: domain, job: jobData }
     })
 
-    // Step 2: Clean and process content with OpenRouter
+    // Step 2: Clean content
+    const cleanedContent = await step.run("clean-content", async () => {
+      console.log(`[processUrl] Step 2: Cleaning content for URL: ${url}`)
+
+      const cleaned = cleanContent(rawContent, {
+        extractMain: true,
+        removeMetadata: true,
+      })
+      console.log(`[processUrl] Cleaned content length: ${cleaned.length}`)
+
+      return cleaned
+    })
+
+    // Step 3: Generate diff with previous version
+    const diffAnalysis = await step.run("generate-diff", async () => {
+      console.log(`[processUrl] Step 3: Generating diff for URL: ${url}`)
+
+      // Get previous version's cleaned content
+      const previousVersion = await db.page.getPreviousVersion(
+        domainInfo.id,
+        url,
+      )
+
+      if (!previousVersion) {
+        console.log("[processUrl] No previous version found, this is a new page")
+        return {
+          isNew: true,
+          diff: null,
+          previousVersionId: null,
+        }
+      }
+
+      console.log(
+        `[processUrl] Found previous version: ${previousVersion.id}`,
+      )
+
+      // Fetch previous cleaned content from storage
+      let previousContent = ""
+      if (previousVersion.html_md_blob_url) {
+        const blob = await storage.download(
+          STORAGE_BUCKETS.ARTIFACTS,
+          previousVersion.html_md_blob_url,
+        )
+        if (blob) {
+          previousContent = await blob.text()
+        }
+      }
+
+      // Generate diff
+      const diff = generateContentDiff(previousContent, cleanedContent)
+      console.log(
+        `[processUrl] Diff generated: ${diff.additions} additions, ${diff.deletions} deletions (${diff.changePercentage.toFixed(2)}% changed)`,
+      )
+
+      return {
+        isNew: false,
+        diff,
+        previousVersionId: previousVersion.id,
+      }
+    })
+
+    // Step 4: Check if content changed - early exit if no changes
+    if (!diffAnalysis.isNew && diffAnalysis.diff && !diffAnalysis.diff.hasChanges) {
+      console.log(`⏭️  No changes detected for ${url}, skipping AI processing`)
+
+      // Store the unchanged content anyway (for audit trail)
+      const storagePath = await step.run("store-unchanged-content", async () => {
+        const path = getProcessedPagePath(
+          domainUrl,
+          jobId,
+          new Date(job.started_at),
+          url,
+        )
+        await storage.upload(STORAGE_BUCKETS.ARTIFACTS, path, cleanedContent)
+        return path
+      })
+
+      const pageVersion = await step.run("create-unchanged-version", async () => {
+        return await db.page.createVersion({
+          pageId,
+          jobId,
+          url,
+          rawMdBlobUrl: rawMdPath,
+          htmlMdBlobUrl: storagePath,
+          changeStatus,
+          semanticImportance: null, // null = no changes
+          reason: "No changes detected in diff",
+        })
+      })
+
+      await step.run("update-last-known-version", async () => {
+        await db.page.updateLastKnownVersion(pageId, pageVersion.id)
+      })
+
+      await step.run("increment-pages-processed", async () => {
+        const updatedJob = await db.job.incrementPagesProcessed(jobId)
+        console.log(`   ✅ Processed page (unchanged): ${url}`)
+        console.log(
+          `   📊 Processed: ${updatedJob.pages_processed} / Received: ${updatedJob.pages_received}`,
+        )
+      })
+
+      // Skip remaining steps, emit completion event
+      await step.run("emit-page-processed", async () => {
+        await sendEvent("page/processed", {
+          pageId,
+          versionId: pageVersion.id,
+          jobId,
+          url,
+          semanticImportance: null,
+          reason: "No changes detected",
+        })
+      })
+
+      return {
+        success: true,
+        pageId,
+        versionId: pageVersion.id,
+        url,
+        semanticImportance: null,
+        reason: "No changes detected",
+        skipped: true,
+      }
+    }
+
+    // Step 5: Process content with OpenRouter (for changed/new pages)
     const processedContent = await step.run(
       "process-with-openrouter",
       async () => {
         console.log(
-          `[processUrl] Step 2: Starting OpenRouter processing for URL: ${url}`,
-        )
-
-        // First do basic cleaning
-        const basicCleaned = cleanContent(rawContent, {
-          extractMain: true,
-          removeMetadata: true,
-        })
-        console.log(
-          `[processUrl] Basic cleaned content length: ${basicCleaned.length}`,
+          `[processUrl] Step 5: Starting OpenRouter processing for URL: ${url}`,
         )
 
         // Then enhance with OpenRouter using domain-specific settings
@@ -87,7 +204,7 @@ export const processUrl = inngest.createFunction(
         // Use OpenRouter to process the content - no fallback
         console.log("[processUrl] Calling OpenRouter.processPageContent...")
         const enhanced = await openRouter.processPageContent(
-          basicCleaned,
+          cleanedContent,
           systemPrompt,
           model,
         )
@@ -97,7 +214,7 @@ export const processUrl = inngest.createFunction(
       },
     )
 
-    // Step 3: Store cleaned/processed content to storage
+    // Step 6: Store cleaned/processed content to storage
     const storagePaths = await step.run("store-processed-content", async () => {
       // Store OpenRouter-processed markdown
       const processedPath = getProcessedPagePath(
@@ -118,7 +235,7 @@ export const processUrl = inngest.createFunction(
       }
     })
 
-    // Step 4: Create page version record
+    // Step 7: Create page version record
     const pageVersion = await step.run("create-page-version", async () => {
       return await db.page.createVersion({
         pageId,
@@ -132,12 +249,12 @@ export const processUrl = inngest.createFunction(
       })
     })
 
-    // Step 5: Update page's last known version
+    // Step 8: Update page's last known version
     await step.run("update-last-known-version", async () => {
       await db.page.updateLastKnownVersion(pageId, pageVersion.id)
     })
 
-    // Step 6: Increment pages processed counter
+    // Step 9: Increment pages processed counter
     const updatedJob = await step.run("increment-pages-processed", async () => {
       const job = await db.job.incrementPagesProcessed(jobId)
       console.log(`   ✅ Processed page: ${url}`)
@@ -155,7 +272,7 @@ export const processUrl = inngest.createFunction(
       return job
     })
 
-    // Step 7: Emit page processed event
+    // Step 10: Emit page processed event
     await step.run("emit-page-processed", async () => {
       await sendEvent("page/processed", {
         pageId,
