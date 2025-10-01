@@ -201,6 +201,23 @@ export const jobService = {
   },
 
   /**
+   * Cancel a job
+   */
+  async cancel(id: string, reason?: string): Promise<Job> {
+    return prisma.job.update({
+      where: { id },
+      data: {
+        status: "canceled",
+        finished_at: new Date(),
+        stats: {
+          canceledAt: new Date().toISOString(),
+          reason: reason || "Manually canceled",
+        } as Prisma.InputJsonValue,
+      },
+    })
+  },
+
+  /**
    * Merge stats with existing stats
    */
   async mergeStats(
@@ -270,5 +287,73 @@ export const jobService = {
         artifacts: true,
       },
     })
+  },
+
+  /**
+   * Increment only pages received counter (when a page arrives from webhook)
+   */
+  async incrementPagesReceived(id: string): Promise<Job> {
+    return prisma.job.update({
+      where: { id },
+      data: {
+        pages_received: {
+          increment: 1,
+        },
+      },
+    })
+  },
+
+  /**
+   * Increment pages processed counter (when a page completes processing)
+   */
+  async incrementPagesProcessed(id: string): Promise<Job> {
+    return prisma.job.update({
+      where: { id },
+      data: {
+        pages_processed: {
+          increment: 1,
+        },
+      },
+    })
+  },
+
+  /**
+   * Mark stream as closed (crawl completed)
+   */
+  async markStreamClosed(id: string): Promise<Job> {
+    return prisma.job.update({
+      where: { id },
+      data: {
+        stream_closed: true,
+      },
+    })
+  },
+
+  /**
+   * Check if job is ready for assembly
+   * Ready when: stream closed AND pages_received === pages_processed
+   */
+  async isReadyForAssembly(id: string): Promise<boolean> {
+    const job = await prisma.job.findUnique({
+      where: { id },
+      select: {
+        pages_processed: true,
+        pages_received: true,
+        stream_closed: true,
+      },
+    })
+
+    if (!job) return false
+
+    // Stream must be closed
+    if (!job.stream_closed) return false
+
+    // All received pages must be processed
+    if (job.pages_received !== job.pages_processed) return false
+
+    // We need at least some pages processed
+    if (job.pages_processed === 0) return false
+
+    return true
   },
 }

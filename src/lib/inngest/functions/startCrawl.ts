@@ -72,10 +72,11 @@ export const startCrawl = inngest.createFunction(
 
     // Step 4: Update job with Firecrawl job ID
     await step.run("update-job-with-firecrawl-id", async () => {
-      await db.job.updateFirecrawlJobId(
+      const returnedJob = await db.job.updateFirecrawlJobId(
         job.id,
         crawlResult.firecrawlJobId as string,
       )
+      return returnedJob
     })
 
     return {

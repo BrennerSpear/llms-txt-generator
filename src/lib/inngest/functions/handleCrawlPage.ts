@@ -34,6 +34,11 @@ export const handleCrawlPage = inngest.createFunction(
       changeTracking,
     } = event.data
 
+    // Log the incoming page URL
+    console.log(`📄 HandleCrawlPage: Processing page URL: ${url}`)
+    console.log(`   Job ID: ${jobId}`)
+    console.log(`   Domain ID: ${domainId}`)
+
     // Step 1: Validate job exists and is active
     const job = await step.run("validate-job", async () => {
       const foundJob = await db.job.getById(jobId)
@@ -42,9 +47,17 @@ export const handleCrawlPage = inngest.createFunction(
         throw new Error(`Job not found: ${jobId}`)
       }
 
+      // Check if job has been canceled
+      if (foundJob.status === "canceled") {
+        console.warn(`🚫 Job ${jobId} has been canceled, skipping page: ${url}`)
+        return foundJob
+      }
+
       if (foundJob.status !== "processing") {
-        console.warn(`Job ${jobId} is not in processing state, skipping page`)
-        return null
+        console.warn(
+          `⚠️ Job ${jobId} is in '${foundJob.status}' state (not 'processing'), skipping page: ${url}`,
+        )
+        return foundJob
       }
 
       if (foundJob.firecrawl_job_id !== firecrawlJobId) {
@@ -56,26 +69,28 @@ export const handleCrawlPage = inngest.createFunction(
       return foundJob
     })
 
-    // Skip if job is not active
+    // Skip if job is not active or has been canceled
     if (!job) {
       return {
         skipped: true,
-        reason: "Job not in processing state",
+        reason: "Job not in processing state or has been canceled",
       }
     }
 
-    // if no `trackChanges` at all, we assume it's a new page or first crawl
-    const hasChanges = !changeTracking || changeTracking.hasChanges
-    // Skip if page hasn't changed significantly
-    if (!hasChanges) {
-      return {
-        skipped: true,
-        reason: "Firecrawl did not detect any changes",
-        url,
-      }
-    }
+    // Step 2: Increment pending pages counter and pages received
+    await step.run("increment-pending-pages", async () => {
+      const updatedJob = await db.job.incrementPagesReceived(jobId)
+      console.log(
+        `   ➕ Page received #${updatedJob.pages_received} for job ${jobId}`,
+      )
+      console.log(
+        `   📊 Received: ${updatedJob.pages_received}/${updatedJob.pages_received || "?"}`,
+      )
+    })
 
-    // Step 2: Create or update page record
+    console.log("track changes", changeTracking)
+
+    // Step 3: Create or update page record
     const page = await step.run("upsert-page", async () => {
       return await db.page.upsert({
         jobId,
@@ -84,7 +99,7 @@ export const handleCrawlPage = inngest.createFunction(
       })
     })
 
-    // Step 3: Get domain URL for path generation
+    // Step 4: Get domain URL for path generation
     const domain = await step.run("get-domain", async () => {
       const foundDomain = await db.domain.getById(domainId)
       if (!foundDomain) {
@@ -93,14 +108,14 @@ export const handleCrawlPage = inngest.createFunction(
       return foundDomain.domain
     })
 
-    // Step 4: Store raw markdown content to Supabase Storage
+    // Step 5: Store raw markdown content to Supabase Storage
     const rawMdPath = await step.run("store-raw-markdown", async () => {
-      const path = getRawPagePath(domain, jobId, url)
+      const path = getRawPagePath(domain, jobId, new Date(job.started_at), url)
       await storage.upload(STORAGE_BUCKETS.ARTIFACTS, path, markdown)
       return path
     })
 
-    // Step 5: Emit page process requested event for further processing
+    // Step 6: Emit page process requested event for further processing
     await step.run("emit-process-requested", async () => {
       await sendEvent("page/process.requested", {
         pageId: page.id,
@@ -119,7 +134,7 @@ export const handleCrawlPage = inngest.createFunction(
       jobId,
       url,
       rawMdPath,
-      hasChanges,
+      hasChanges: changeTracking?.hasChanges,
       metadata: {
         title: (metadata as Document["metadata"])?.title,
         description: (metadata as Document["metadata"])?.description,

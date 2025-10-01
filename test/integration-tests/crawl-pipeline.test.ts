@@ -21,7 +21,7 @@ config({ path: resolve(process.cwd(), ".env") })
 import { runCrawlPipelineTest } from "./crawl-pipeline.base"
 
 const BASE_URL = process.env.TEST_BASE_URL || "http://localhost:3000"
-const TEST_DOMAIN = "adidas.com"
+const TEST_DOMAIN = "https://www.asylum.vc/"
 
 // Verify required API keys
 if (!process.env.FIRECRAWL_API_KEY) {
@@ -52,6 +52,7 @@ async function main() {
       useMockServices: false,
       firecrawlApiKey: process.env.FIRECRAWL_API_KEY,
       openrouterApiKey: process.env.OPENROUTER_API_KEY,
+      maxPages: 4,
     })
 
     console.log("\n✅ Test passed with real services!")

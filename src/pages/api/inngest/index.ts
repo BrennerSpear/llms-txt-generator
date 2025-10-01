@@ -3,6 +3,7 @@ import { serve } from "inngest/next"
 import { inngest } from "~/lib/inngest/client"
 
 import { assembleArtifacts } from "~/lib/inngest/functions/assembleArtifacts"
+import { checkJobReady } from "~/lib/inngest/functions/checkJobReady"
 import { finalizeJob } from "~/lib/inngest/functions/finalizeJob"
 import { handleCrawlCompleted } from "~/lib/inngest/functions/handleCrawlCompleted"
 import { handleCrawlPage } from "~/lib/inngest/functions/handleCrawlPage"
@@ -15,6 +16,7 @@ const functions: InngestFunction.Like[] = [
   handleCrawlPage, // F2 - Handle incoming page from webhook
   processUrl, // F3 - Process and analyze page content
   handleCrawlCompleted, // F4 - Handle crawl completion
+  checkJobReady, // Coordinator - Check if job is ready for assembly after page processed
   assembleArtifacts, // F5 - Assemble llms.txt and other artifacts
   finalizeJob, // F6 - Finalize job and update status
 ]

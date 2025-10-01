@@ -24,7 +24,10 @@ export default async function handler(
     //   return res.status(401).json({ error: "Invalid signature" })
     // }
 
-    const { type, jobId: firecrawlJobId, data } = req.body
+    const { type, id: firecrawlJobId, data, ...rest } = req.body
+    console.log(
+      `🔍crawl.page Webhook received: ${JSON.stringify(rest, null, 2)}`,
+    )
 
     // Handle different webhook event types
     switch (type) {
@@ -37,7 +40,6 @@ export default async function handler(
       case "crawl.page": {
         // Get the job from our database using Firecrawl job ID
         const job = await db.job.getByFirecrawlId(firecrawlJobId)
-
         if (!job) {
           console.error(`Job not found for Firecrawl ID: ${firecrawlJobId}`)
           return res.status(404).json({
@@ -66,15 +68,7 @@ export default async function handler(
             url, // URL comes from metadata
             markdown: document.markdown || "",
             metadata: document.metadata,
-            changeTracking: document.changeTracking
-              ? {
-                  hasChanges: Boolean(document.changeTracking.hasChanges),
-                  diff:
-                    typeof document.changeTracking.diff === "string"
-                      ? document.changeTracking.diff
-                      : undefined,
-                }
-              : undefined,
+            changeTracking: document.changeTracking || {},
             timestamp: new Date().toISOString(),
           })
         }
@@ -88,6 +82,10 @@ export default async function handler(
 
       case "crawl.completed": {
         const job = await db.job.getByFirecrawlId(firecrawlJobId)
+
+        console.log(
+          `🔍 crawl.completed data: ${JSON.stringify(req.body, null, 2)}`,
+        )
 
         if (!job) {
           console.error(`Job not found for Firecrawl ID: ${firecrawlJobId}`)
@@ -105,7 +103,6 @@ export default async function handler(
           jobId: job.id,
           firecrawlJobId,
           completedAt: new Date().toISOString(),
-          totalPages: data.totalPages || data.pagesScraped || 0,
           stats: {
             duration: 0, // Will be calculated in the handler
             pagesProcessed: data.pagesScraped || 0,

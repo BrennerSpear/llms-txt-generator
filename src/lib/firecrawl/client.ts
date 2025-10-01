@@ -12,9 +12,7 @@ class FirecrawlClient {
 
   constructor() {
     // Determine if we should use mock
-    this.useMock =
-      env.USE_MOCK_SERVICES === true ||
-      (env.USE_MOCK_SERVICES !== false && env.NODE_ENV === "development")
+    this.useMock = env.USE_MOCK_SERVICES === true
 
     if (this.useMock) {
       console.log("[Firecrawl] Using mock service")
