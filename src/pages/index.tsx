@@ -1,10 +1,24 @@
 import Head from "next/head"
 import Link from "next/link"
+import { useState } from "react"
 import { DomainCrawler } from "~/components/DomainCrawler"
 import { DomainsTable } from "~/components/domains-table"
 
 export default function Home() {
-  // Main page with header and domains table
+  const [refreshDomains, setRefreshDomains] = useState<(() => void) | null>(
+    null,
+  )
+
+  const handleRefreshNeeded = (refreshFn: () => void) => {
+    setRefreshDomains(() => refreshFn)
+  }
+
+  const handleDomainAdded = () => {
+    if (refreshDomains) {
+      refreshDomains()
+    }
+  }
+
   return (
     <>
       <Head>
@@ -25,7 +39,7 @@ export default function Home() {
         {/* Sticky Form Section */}
         <div className="sticky top-0 z-10 border-gray-200 border-b bg-white shadow-md">
           <div className="container mx-auto px-4 py-6">
-            <DomainCrawler />
+            <DomainCrawler onDomainAdded={handleDomainAdded} />
           </div>
         </div>
 
@@ -37,7 +51,7 @@ export default function Home() {
                 Crawled Domains
               </h2>
             </div>
-            <DomainsTable />
+            <DomainsTable onRefreshNeeded={handleRefreshNeeded} />
           </div>
         </main>
       </div>
