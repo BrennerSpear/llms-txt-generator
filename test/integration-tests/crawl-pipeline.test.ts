@@ -212,6 +212,7 @@ async function runIntegrationTest() {
         // Verify F6 added final stats
         if (status.job.stats) {
           console.log("✅ F6 added final statistics:")
+          // biome-ignore lint/suspicious/noExplicitAny: <explanation>
           const stats = status.job.stats as any
           if (stats.durationMinutes) {
             console.log(`   - Duration: ${stats.durationMinutes} minutes`)

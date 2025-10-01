@@ -151,7 +151,6 @@ export const storage = {
 // Storage bucket names as constants
 export const STORAGE_BUCKETS = {
   ARTIFACTS: "artifacts",
-  PAGE_CONTENT: "page-content",
 } as const
 
 /**
@@ -160,7 +159,6 @@ export const STORAGE_BUCKETS = {
 export async function initializeStorageBuckets() {
   try {
     await storage.createBucketIfNotExists(STORAGE_BUCKETS.ARTIFACTS, false)
-    await storage.createBucketIfNotExists(STORAGE_BUCKETS.PAGE_CONTENT, false)
     console.log("Storage buckets initialized successfully")
   } catch (error) {
     console.error("Failed to initialize storage buckets:", error)

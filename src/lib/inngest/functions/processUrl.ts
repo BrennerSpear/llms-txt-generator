@@ -1,5 +1,6 @@
 import { db } from "~/lib/db"
 import { STORAGE_BUCKETS, storage } from "~/lib/storage/client"
+import { getProcessedPagePath } from "~/lib/storage/paths"
 import { cleanContent } from "~/lib/utils/cleaning"
 import {
   calculateSimilarity,
@@ -24,7 +25,7 @@ export const processUrl = inngest.createFunction(
   },
   { event: "page/process.requested" },
   async ({ event, step }) => {
-    const { pageId, jobId, url, rawContent, rawMdPath } = event.data
+    const { pageId, jobId, domainUrl, url, rawContent, rawMdPath } = event.data
 
     // Step 1: Clean and process content
     const cleanedContent = await step.run("clean-content", async () => {
@@ -80,13 +81,10 @@ export const processUrl = inngest.createFunction(
       let previousContent = ""
       try {
         if (previousVersion.raw_md_blob_url) {
-          const path = previousVersion.raw_md_blob_url
-            .split("/")
-            .slice(-3)
-            .join("/")
+          // raw_md_blob_url now contains the full path within the artifacts bucket
           const blob = await storage.download(
-            STORAGE_BUCKETS.PAGE_CONTENT,
-            path,
+            STORAGE_BUCKETS.ARTIFACTS,
+            previousVersion.raw_md_blob_url,
           )
           if (blob) {
             previousContent = await blob.text()
@@ -115,13 +113,10 @@ export const processUrl = inngest.createFunction(
 
     // Step 4: Store cleaned/processed content to storage
     const storagePaths = await step.run("store-cleaned-content", async () => {
-      const timestamp = Date.now()
-      const urlSlug = url.replace(/[^a-z0-9]/gi, "_").toLowerCase()
-
       // Store cleaned/processed markdown (this will be the OpenRouter processed version eventually)
-      const processedPath = `jobs/${jobId}/processed/${urlSlug}_${timestamp}.md`
+      const processedPath = getProcessedPagePath(domainUrl, jobId, url)
       await storage.upload(
-        STORAGE_BUCKETS.PAGE_CONTENT,
+        STORAGE_BUCKETS.ARTIFACTS,
         processedPath,
         cleanedContent,
       )
