@@ -1,4 +1,5 @@
 import { env } from "~/env"
+import { DEFAULT_MODEL } from "../openrouter/types"
 
 interface OpenRouterMessage {
   role: "system" | "user" | "assistant"
@@ -78,7 +79,7 @@ Generate:
 Format as markdown with clear sections.`
 
     const response = await this.makeRequest({
-      model: "openai/gpt-4o-mini",
+      model: DEFAULT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -113,7 +114,7 @@ Create a single paragraph that captures:
 Be concise but informative.`
 
     const response = await this.makeRequest({
-      model: "openai/gpt-4o-mini",
+      model: DEFAULT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -152,7 +153,7 @@ Example format:
 }`
 
     const response = await this.makeRequest({
-      model: "openai/gpt-4o-mini",
+      model: DEFAULT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -287,7 +288,7 @@ Generate the llms.txt content following this exact structure. Be concise but inf
 Organize pages into logical sections based on their purpose and content.`
 
     const response = await this.makeRequest({
-      model: "openai/gpt-4o",
+      model: DEFAULT_MODEL,
       messages: [
         {
           role: "system",

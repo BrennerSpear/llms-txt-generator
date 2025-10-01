@@ -33,6 +33,9 @@ interface DomainDetail {
       created_at: string
       raw_md_blob_url: string | null
       html_md_blob_url: string | null
+      page_title: string | null
+      page_description: string | null
+      page_summary: string | null
     }>
   }>
 }
@@ -267,6 +270,9 @@ export default function DomainDetailPage() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
+                        Title
+                      </th>
+                      <th className="px-6 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
                         URL
                       </th>
                       <th className="px-6 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wider">
@@ -286,8 +292,28 @@ export default function DomainDetailPage() {
                   <tbody className="divide-y divide-gray-200 bg-white">
                     {domain.pages.map((page) => {
                       const latestVersion = page.page_versions[0]
+                      const tooltipContent =
+                        latestVersion?.page_description ||
+                        latestVersion?.page_summary
+                          ? [
+                              latestVersion?.page_description &&
+                                `Description: ${latestVersion.page_description}`,
+                              latestVersion?.page_summary &&
+                                `Summary: ${latestVersion.page_summary}`,
+                            ]
+                              .filter(Boolean)
+                              .join("\n\n")
+                          : undefined
                       return (
                         <tr key={page.id}>
+                          <td className="max-w-xs px-6 py-4">
+                            <div
+                              className="truncate text-gray-900 text-sm"
+                              title={tooltipContent}
+                            >
+                              {latestVersion?.page_title || "—"}
+                            </div>
+                          </td>
                           <td className="max-w-md truncate px-6 py-4">
                             <a
                               href={page.url}
