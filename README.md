@@ -8,72 +8,9 @@ buy > build - try existing services first before building from scratch (firecraw
 
 ### First-time setup
 
-1) Install prerequisites
+**Quick Start (macOS)**: Run `./init.sh` to automatically check and install all dependencies (Node.js 20+, pnpm, Docker, Supabase CLI, Cloudflare Tunnel), create your empty `.env` file, and install project dependencies.
 
-- Node.js 20+
-- pnpm
-- Docker Desktop (running)
-- Supabase CLI
-- Cloudflare tunnel (for webhook development)
-
-```bash
-# Install Supabase CLI
-brew install supabase
-
-# Install Cloudflare tunnel
-# Option A: macOS with Homebrew
-brew install cloudflare/cloudflare/cloudflared
-
-# Option B: NPM (all platforms)
-npm install -g cloudflared
-
-# Option C: Download binary from
-# https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation
-```
-
-2) Install dependencies
-
-```bash
-pnpm install
-```
-
-3) Environment variables
-
-```bash
-cp .env.example .env.local
-# Edit .env.local with your values. If using Supabase local, see below.
-```
-
-4) Initialize Supabase (local stack)
-
-```bash
-supabase init
-```
-
-5) Start Supabase and capture connection info
-
-```bash
-supabase start
-# Note the printed API URL, DB port (usually 54322), anon key, and service role key
-```
-
-6) Configure database URL for Prisma
-
-- Set `DATABASE_URL` in `.env.local` to the Supabase local Postgres URL, for example:
-
-```env
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
-```
-
-7) (Optional) Add Supabase vars for parity
-
-```env
-SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_ANON_KEY=PASTE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY=PASTE_SERVICE_ROLE_KEY
-NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
-NEXT_PUBLIC_SUPABASE_ANON_KEY=PASTE_ANON_KEY
-```
+**Manual Setup**: Follow the steps below for manual installation or non-macOS systems.
 
 8) Initialize database schema
 
@@ -81,48 +18,59 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=PASTE_ANON_KEY
 pnpm db:push
 ```
 
-9) Initialize Supabase storage buckets
 
-```bash
-# Create required storage buckets for local development (idempotent)
-pnpm tsx scripts/init-storage.ts
-```
-
-This creates the `artifacts` and `page-content` buckets needed for storing crawl results. The script is idempotent and safe to run multiple times.
+This creates the `artifacts` bucket needed for storing crawl results. The script is idempotent and safe to run multiple times.
 
 ### Running services locally
 
-Open separate terminals (or run in background) for each service:
+**Option 1: Automated Start (Recommended)**
 
-1) Next.js application
+Run `./start.sh` to automatically:
+- Start Cloudflare Tunnel and extract the public URL
+- Update `FIRECRAWL_WEBHOOK_URL` in `.env` with the tunnel URL
+- Start Inngest Dev Server in background
+- Start Next.js dev server in foreground
+
+Press Ctrl+C to stop all services. The script handles cleanup automatically.
 
 ```bash
-pnpm dev
+./start.sh
 ```
 
-2) Inngest Dev Server
+**Option 2: Manual Start (See All Logs)**
+
+Run each service in separate terminals to view all logs independently:
+
+1) Supabase local stack
+
+```bash
+# If not already running
+supabase start
+
+# Inspect
+supabase status
+```
+
+2) Cloudflare Tunnel for webhooks
+
+```bash
+cloudflared tunnel --url localhost:3000
+# Copy the generated https://xxxxx.trycloudflare.com URL
+# Manually update FIRECRAWL_WEBHOOK_URL in .env with:
+# FIRECRAWL_WEBHOOK_URL="https://xxxxx.trycloudflare.com/api/webhooks/firecrawl"
+```
+
+3) Inngest Dev Server
 
 ```bash
 pnpm dlx inngest-cli@latest dev
 # Dev UI: http://localhost:8288
 ```
 
-3) Supabase local stack
+4) Next.js application
 
 ```bash
-# If not already running
-supabase start
-
-# Inspect connection details if needed
-supabase status
-```
-
-4) Cloudflare Tunnel for webhooks
-
-```bash
-cloudflared tunnel --url localhost:3000
-# Copy the generated https://xxxxx.trycloudflare.com URL
-# Use this URL for Firecrawl webhook configuration
+pnpm dev
 ```
 
 5) (Optional) Prisma Studio
@@ -130,11 +78,3 @@ cloudflared tunnel --url localhost:3000
 ```bash
 pnpm db:studio
 ```
-
-### Notes
-
-- This project validates `DATABASE_URL` in `src/env.js`. When using Supabase locally, point it to `127.0.0.1:54322` unless you customized ports in `supabase/config.toml`.
-- The script `start-database.sh` runs a plain Postgres container; prefer the Supabase stack during development so Auth/Realtime/Studio are available and environment variables align.
-- To stop Supabase: `supabase stop`. To remove volumes: `supabase stop --remove`.
-
-
