@@ -51,21 +51,28 @@ export async function startDomainCrawl(
   checkIntervalMinutes: number,
   webhookUrl: string,
   maxPages?: number,
+  enableFirecrawlChangeTracking = false, // Default to false - we use our own change detection
 ): Promise<CrawlResponse> {
   // Calculate maxAge based on check interval
   // Convert minutes to milliseconds, ensure non-negative
   const maxAge = Math.max(0, checkIntervalMinutes * 60_000)
 
+  // Build formats array - only include changeTracking if enabled
+  const formats: Array<
+    "markdown" | { type: "changeTracking"; modes: string[]; tag: string }
+  > = ["markdown"]
+
+  if (enableFirecrawlChangeTracking) {
+    formats.push({
+      type: "changeTracking",
+      modes: ["git-diff"],
+      tag: process.env.NODE_ENV ?? "production",
+    })
+  }
+
   const result = await firecrawl.startCrawl(domainUrl, {
     scrapeOptions: {
-      formats: [
-        "markdown",
-        {
-          type: "changeTracking",
-          modes: ["git-diff"],
-          tag: process.env.NODE_ENV ?? "production",
-        },
-      ],
+      formats,
       proxy: "auto",
       maxAge,
     },
