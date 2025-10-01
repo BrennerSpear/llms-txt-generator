@@ -75,6 +75,53 @@ export const domainService = {
   },
 
   /**
+   * Get domain with pages and their latest versions
+   */
+  async getWithPages(id: string): Promise<
+    | (Domain & {
+        prompt_profile: PromptProfile | null
+        _count: {
+          pages: number
+          jobs: number
+        }
+        pages: Array<{
+          id: string
+          url: string
+          created_at: Date
+          page_versions: Array<{
+            id: string
+            created_at: Date
+            raw_md_blob_url: string | null
+            html_md_blob_url: string | null
+          }>
+        }>
+      })
+    | null
+  > {
+    return prisma.domain.findUnique({
+      where: { id },
+      include: {
+        prompt_profile: true,
+        _count: {
+          select: {
+            pages: true,
+            jobs: true,
+          },
+        },
+        pages: {
+          include: {
+            page_versions: {
+              orderBy: { created_at: "desc" },
+              take: 1,
+            },
+          },
+          orderBy: { url: "asc" },
+        },
+      },
+    })
+  },
+
+  /**
    * Get a domain by URL with prompt profile
    */
   async getByDomain(domain: string): Promise<
@@ -182,5 +229,55 @@ export const domainService = {
     await prisma.domain.delete({
       where: { id },
     })
+  },
+
+  /**
+   * Get all domains with stats for the table view
+   */
+  async getAllWithStats(): Promise<
+    (Domain & {
+      prompt_profile: PromptProfile | null
+      _count: {
+        pages: number
+      }
+      lastJob: (Job & { _count: { page_versions: number } }) | null
+    })[]
+  > {
+    const domains = await prisma.domain.findMany({
+      include: {
+        prompt_profile: true,
+        _count: {
+          select: {
+            pages: true,
+          },
+        },
+      },
+      orderBy: {
+        updated_at: "desc",
+      },
+    })
+
+    // Get the last job for each domain
+    const domainsWithLastJob = await Promise.all(
+      domains.map(async (domain) => {
+        const lastJob = await prisma.job.findFirst({
+          where: { domain_id: domain.id },
+          orderBy: { started_at: "desc" },
+          include: {
+            _count: {
+              select: {
+                page_versions: true,
+              },
+            },
+          },
+        })
+        return {
+          ...domain,
+          lastJob,
+        }
+      }),
+    )
+
+    return domainsWithLastJob
   },
 }
