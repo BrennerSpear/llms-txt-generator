@@ -7,6 +7,7 @@ import {
   PencilIcon,
 } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
+import Link from "next/link"
 import { useEffect, useState } from "react"
 
 interface Domain {
@@ -124,16 +125,38 @@ export function DomainsTable() {
     }
   }
 
-  const downloadArtifact = (blobUrl: string, filename: string) => {
-    const link = document.createElement("a")
-    link.href = blobUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  const downloadArtifact = async (blobUrl: string, filename: string) => {
+    try {
+      // Fetch the file content from the blob URL
+      const response = await fetch(blobUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.statusText}`)
+      }
+
+      // Create a blob from the response
+      const blob = await response.blob()
+
+      // Create a temporary URL for the blob
+      const url = window.URL.createObjectURL(blob)
+
+      // Create and trigger download link
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+
+      // Cleanup
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Failed to download artifact:", error)
+      alert("Failed to download file. Please try again.")
+    }
   }
 
   const viewArtifact = (blobUrl: string) => {
+    // Open the Supabase storage URL directly in a new tab
     window.open(blobUrl, "_blank")
   }
 
@@ -185,12 +208,12 @@ export function DomainsTable() {
           {domains.map((domain) => (
             <tr key={domain.id}>
               <td className="whitespace-nowrap px-6 py-4">
-                <a
+                <Link
                   href={`/domains/${domain.id}`}
                   className="font-medium text-blue-600 hover:text-blue-900"
                 >
                   {domain.domain}
-                </a>
+                </Link>
               </td>
               <td className="whitespace-nowrap px-6 py-4">
                 <span
@@ -262,7 +285,7 @@ export function DomainsTable() {
                           <button
                             type="button"
                             onClick={() =>
-                              downloadArtifact(
+                              void downloadArtifact(
                                 artifacts[domain.id]?.llmsTxt?.blob_url ?? "",
                                 `${domain.domain}-llms.txt`,
                               )
@@ -292,7 +315,7 @@ export function DomainsTable() {
                           <button
                             type="button"
                             onClick={() =>
-                              downloadArtifact(
+                              void downloadArtifact(
                                 artifacts[domain.id]?.llmsFullTxt?.blob_url ??
                                   "",
                                 `${domain.domain}-llms-full.txt`,
