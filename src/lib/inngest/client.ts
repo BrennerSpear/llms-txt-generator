@@ -107,6 +107,13 @@ type JobCompleted = {
   }
 }
 
+type ScheduleRecrawlsManual = {
+  data: {
+    triggeredBy: string
+    timestamp: string
+  }
+}
+
 // Export the events type for use in functions
 export type Events = {
   "domain/ingest.requested": DomainIngestRequested
@@ -118,6 +125,7 @@ export type Events = {
   "job/assemble.requested": JobAssembleRequested
   "job/finalize.requested": JobFinalizeRequested
   "job/completed": JobCompleted
+  "schedule-recrawls/manual": ScheduleRecrawlsManual
 }
 
 // Create the Inngest client with typed events

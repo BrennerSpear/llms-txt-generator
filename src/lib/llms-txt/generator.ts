@@ -11,18 +11,6 @@ import { openRouterService } from "./openrouter-client"
 interface PageVersionWithPage extends PageVersion {
   page: Page
 }
-// interface PageVersionWithPage {
-//   id: string
-//   created_at: Date | string
-//   job_id: string
-//   url: string
-//   html_md_blob_url: string | null
-//   page: {
-//     url: string
-//     id: string
-//   }
-//   [key: string]: any // Allow other properties
-// }
 
 interface GeneratorOptions {
   domain: string
