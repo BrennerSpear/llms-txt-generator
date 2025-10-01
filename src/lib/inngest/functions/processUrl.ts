@@ -84,7 +84,9 @@ export const processUrl = inngest.createFunction(
       )
 
       if (!previousVersion) {
-        console.log("[processUrl] No previous version found, this is a new page")
+        console.log(
+          "[processUrl] No previous version found, this is a new page",
+        )
         return {
           isNew: true,
           diff: null,
@@ -92,9 +94,7 @@ export const processUrl = inngest.createFunction(
         }
       }
 
-      console.log(
-        `[processUrl] Found previous version: ${previousVersion.id}`,
-      )
+      console.log(`[processUrl] Found previous version: ${previousVersion.id}`)
 
       // Fetch previous cleaned content from storage
       let previousContent = ""
@@ -122,33 +122,43 @@ export const processUrl = inngest.createFunction(
     })
 
     // Step 4: Check if content changed - early exit if no changes
-    if (!diffAnalysis.isNew && diffAnalysis.diff && !diffAnalysis.diff.hasChanges) {
+    if (
+      !diffAnalysis.isNew &&
+      diffAnalysis.diff &&
+      !diffAnalysis.diff.hasChanges
+    ) {
       console.log(`⏭️  No changes detected for ${url}, skipping AI processing`)
 
       // Store the unchanged content anyway (for audit trail)
-      const storagePath = await step.run("store-unchanged-content", async () => {
-        const path = getProcessedPagePath(
-          domainUrl,
-          jobId,
-          new Date(job.started_at),
-          url,
-        )
-        await storage.upload(STORAGE_BUCKETS.ARTIFACTS, path, cleanedContent)
-        return path
-      })
+      const storagePath = await step.run(
+        "store-unchanged-content",
+        async () => {
+          const path = getProcessedPagePath(
+            domainUrl,
+            jobId,
+            new Date(job.started_at),
+            url,
+          )
+          await storage.upload(STORAGE_BUCKETS.ARTIFACTS, path, cleanedContent)
+          return path
+        },
+      )
 
-      const pageVersion = await step.run("create-unchanged-version", async () => {
-        return await db.page.createVersion({
-          pageId,
-          jobId,
-          url,
-          rawMdBlobUrl: rawMdPath,
-          htmlMdBlobUrl: storagePath,
-          changeStatus,
-          semanticImportance: null, // null = no changes
-          reason: "No changes detected in diff",
-        })
-      })
+      const pageVersion = await step.run(
+        "create-unchanged-version",
+        async () => {
+          return await db.page.createVersion({
+            pageId,
+            jobId,
+            url,
+            rawMdBlobUrl: rawMdPath,
+            htmlMdBlobUrl: storagePath,
+            changeStatus,
+            semanticImportance: null, // null = no changes
+            reason: "No changes detected in diff",
+          })
+        },
+      )
 
       await step.run("update-last-known-version", async () => {
         await db.page.updateLastKnownVersion(pageId, pageVersion.id)
@@ -185,12 +195,44 @@ export const processUrl = inngest.createFunction(
       }
     }
 
-    // Step 5: Process content with OpenRouter (for changed/new pages)
+    // Step 5: Evaluate semantic importance of changes
+    const semanticAnalysis = await step.run(
+      "evaluate-change-importance",
+      async () => {
+        console.log(
+          `[processUrl] Step 5: Evaluating semantic importance for URL: ${url}`,
+        )
+
+        if (diffAnalysis.isNew) {
+          console.log("[processUrl] New page, assigning score 4 (major)")
+          return { score: 4, reason: "New page" }
+        }
+
+        if (!diffAnalysis.diff) {
+          console.log("[processUrl] No diff available, assigning score 2")
+          return { score: 2, reason: "No diff available" }
+        }
+
+        // Use OpenRouter to evaluate the semantic importance
+        const model = "openai/gpt-4o-mini"
+        console.log(`[processUrl] Evaluating changes with model: ${model}`)
+
+        const score = await openRouter.evaluateChangeImportance(
+          diffAnalysis.diff.diffText,
+          model,
+        )
+
+        console.log(`[processUrl] Semantic importance score: ${score}/4`)
+        return { score, reason: `Semantic importance: ${score}/4` }
+      },
+    )
+
+    // Step 6: Process content with OpenRouter (for changed/new pages)
     const processedContent = await step.run(
       "process-with-openrouter",
       async () => {
         console.log(
-          `[processUrl] Step 5: Starting OpenRouter processing for URL: ${url}`,
+          `[processUrl] Step 6: Starting OpenRouter processing for URL: ${url}`,
         )
 
         // Then enhance with OpenRouter using domain-specific settings
@@ -214,7 +256,7 @@ export const processUrl = inngest.createFunction(
       },
     )
 
-    // Step 6: Store cleaned/processed content to storage
+    // Step 7: Store cleaned/processed content to storage
     const storagePaths = await step.run("store-processed-content", async () => {
       // Store OpenRouter-processed markdown
       const processedPath = getProcessedPagePath(
@@ -235,7 +277,7 @@ export const processUrl = inngest.createFunction(
       }
     })
 
-    // Step 7: Create page version record
+    // Step 8: Create page version record
     const pageVersion = await step.run("create-page-version", async () => {
       return await db.page.createVersion({
         pageId,
@@ -244,17 +286,17 @@ export const processUrl = inngest.createFunction(
         rawMdBlobUrl: storagePaths.rawPath, // Markdown directly from Firecrawl
         htmlMdBlobUrl: storagePaths.processedPath, // OpenRouter-processed version
         changeStatus, // Store the changeStatus from Firecrawl
-        reason: "Processed with OpenRouter",
-        semanticImportance: null, // Will be set by change detection later
+        reason: semanticAnalysis.reason,
+        semanticImportance: semanticAnalysis.score,
       })
     })
 
-    // Step 8: Update page's last known version
+    // Step 9: Update page's last known version
     await step.run("update-last-known-version", async () => {
       await db.page.updateLastKnownVersion(pageId, pageVersion.id)
     })
 
-    // Step 9: Increment pages processed counter
+    // Step 10: Increment pages processed counter
     const updatedJob = await step.run("increment-pages-processed", async () => {
       const job = await db.job.incrementPagesProcessed(jobId)
       console.log(`   ✅ Processed page: ${url}`)
@@ -272,15 +314,15 @@ export const processUrl = inngest.createFunction(
       return job
     })
 
-    // Step 10: Emit page processed event
+    // Step 11: Emit page processed event
     await step.run("emit-page-processed", async () => {
       await sendEvent("page/processed", {
         pageId,
         versionId: pageVersion.id,
         jobId,
         url,
-        semanticImportance: null,
-        reason: "Processed with OpenRouter",
+        semanticImportance: semanticAnalysis.score,
+        reason: semanticAnalysis.reason,
       })
     })
 
@@ -289,8 +331,8 @@ export const processUrl = inngest.createFunction(
       pageId,
       versionId: pageVersion.id,
       url,
-      semanticImportance: null,
-      reason: "Processed with OpenRouter",
+      semanticImportance: semanticAnalysis.score,
+      reason: semanticAnalysis.reason,
     }
   },
 )

@@ -118,6 +118,63 @@ Return only the processed markdown content without any additional commentary.`
   }
 
   /**
+   * Evaluate semantic importance of content changes
+   * Returns a score from 1-4:
+   * 1 = Minor/insignificant (typos, formatting, dates)
+   * 2 = Moderate (small content updates, minor corrections)
+   * 3 = Significant (new information, meaningful updates)
+   * 4 = Major (substantial content changes, new features/sections)
+   *
+   * NOTE / TODO We should be using structured output here.
+   */
+  async evaluateChangeImportance(
+    contentDiff: string,
+    model = "openai/gpt-4o-mini",
+  ): Promise<number> {
+    const systemPrompt = `You are a content change analyzer. Evaluate the semantic importance of changes shown in a git-style diff.
+
+Score the changes on a scale of 1-4:
+- 1: Minor/insignificant (typos, whitespace, formatting, date updates, trivial wording)
+- 2: Moderate (small content updates, minor corrections, updated examples)
+- 3: Significant (new information, meaningful content updates, structural changes)
+- 4: Major (substantial new content, new features/sections, fundamental changes)
+
+Consider:
+- Volume of changes
+- Type of changes (factual updates vs formatting)
+- Impact on documentation meaning
+- Value for users/LLMs consuming this content
+
+Return ONLY a single integer (1, 2, 3, or 4). No explanation.`
+
+    const response = await this.createChatCompletion({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `Evaluate these changes:\n\n${contentDiff}`,
+        },
+      ],
+      temperature: 0.1,
+      max_tokens: 10,
+    })
+
+    const scoreText = response.choices[0]?.message?.content?.trim() ?? "2"
+    const score = Number.parseInt(scoreText, 10)
+
+    // Validate and clamp to 1-4 range
+    if (Number.isNaN(score) || score < 1 || score > 4) {
+      console.warn(
+        `Invalid change importance score: ${scoreText}, defaulting to 2`,
+      )
+      return 2
+    }
+
+    return score
+  }
+
+  /**
    * Summarize page content
    */
   async summarizeContent(
@@ -241,6 +298,27 @@ class OpenRouterClientWrapper {
       `[OpenRouter] Processed content length: ${result.length} characters`,
     )
     return result
+  }
+
+  /**
+   * Evaluate change importance - delegates to mock or real client
+   */
+  async evaluateChangeImportance(
+    contentDiff: string,
+    model = "openai/gpt-4o-mini",
+  ): Promise<number> {
+    console.log(
+      `[OpenRouter] evaluateChangeImportance called with model: ${model}`,
+    )
+    console.log(`[OpenRouter] Using ${this.useMock ? "MOCK" : "REAL"} client`)
+
+    if ("evaluateChangeImportance" in this.client) {
+      return await this.client.evaluateChangeImportance(contentDiff, model)
+    }
+
+    // Fallback for mock - return a default score of 3 (significant)
+    console.log("[OpenRouter] Mock fallback: returning score 3")
+    return 3
   }
 
   /**
