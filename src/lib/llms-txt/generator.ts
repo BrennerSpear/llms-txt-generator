@@ -148,43 +148,72 @@ export async function generateLlmsFullTxt({
   domain,
   pageVersions,
   jobId,
+  useMock = env.USE_MOCK_SERVICES ?? env.NODE_ENV === "development",
 }: GeneratorOptions): Promise<string | null> {
   if (pageVersions.length === 0) {
     return null
   }
 
+  // Convert PageVersions to PageData format for AI processing
+  const pagesData: PageData[] = pageVersions.map((version) => ({
+    url: version.page.url,
+    title: version.page_title || version.page.url.split("/").pop() || "Page",
+    description: version.page_description || "Page content",
+    summary: version.page_summary || undefined,
+    content: "", // Not needed for full.txt, we use summaries from DB
+  }))
+
   const sections: string[] = []
+
+  // Generate site overview using AI
+  let overview: string
+  if (useMock) {
+    overview = `Comprehensive content archive from ${domain}`
+  } else {
+    overview = await openRouterService.generateSiteOverview(domain, pagesData)
+  }
 
   // Add professional header
   sections.push(`# ${domain} - Complete Documentation`)
   sections.push("")
-  sections.push(`> Comprehensive content archive from ${domain}`)
+  sections.push(`> ${overview}`)
   sections.push("")
   sections.push(`Generated: ${new Date().toISOString()}`)
   sections.push("")
   sections.push("---")
   sections.push("")
 
-  // Sort pages by URL for better organization
-  const sortedVersions = [...pageVersions].sort((a, b) =>
-    a.page.url.localeCompare(b.page.url),
-  )
-
-  // Group pages by path segments for organization
-  const pagesByPath = groupPagesByPath(sortedVersions)
-
-  // Add table of contents if multiple categories
-  if (Object.keys(pagesByPath).length > 1) {
-    sections.push(...generateTableOfContents(pagesByPath))
+  // Categorize pages using AI
+  let categorizedPages: Record<
+    string,
+    Array<{ url: string; title: string; description: string; summary?: string }>
+  >
+  if (useMock) {
+    // Use simple path-based grouping for mock
+    categorizedPages = groupPagesByPathSimple(pagesData)
+  } else {
+    // Use AI categorization (doesn't need content field)
+    categorizedPages = await openRouterService.categorizePages(pagesData)
   }
 
-  // Add pages organized by category (using database summaries only)
-  for (const [category, versions] of Object.entries(pagesByPath)) {
+  // Add table of contents if multiple categories
+  if (Object.keys(categorizedPages).length > 1) {
+    sections.push(...generateTableOfContentsForAI(categorizedPages))
+  }
+
+  // Add pages organized by AI-determined categories
+  for (const [category, pages] of Object.entries(categorizedPages)) {
+    if (pages.length === 0) continue
+
     sections.push(`## ${category}`)
     sections.push("")
 
-    for (const version of versions) {
-      sections.push(...formatPageSection(version))
+    for (const page of pages) {
+      // Find the corresponding PageVersion for this page
+      const version = pageVersions.find((v) => v.page.url === page.url)
+      if (version) {
+        sections.push(...formatPageSection(version))
+      }
     }
   }
 
@@ -192,29 +221,35 @@ export async function generateLlmsFullTxt({
 }
 
 /**
- * Group pages by their URL path segments
+ * Simple path-based grouping for PageData (used in mock mode)
  */
-function groupPagesByPath(
-  pageVersions: PageVersionWithPage[],
-): Record<string, PageVersionWithPage[]> {
-  const pagesByPath: Record<string, PageVersionWithPage[]> = {}
+function groupPagesByPathSimple(
+  pages: PageData[],
+): Record<
+  string,
+  Array<{ url: string; title: string; description: string; summary?: string }>
+> {
+  const pagesByPath: Record<
+    string,
+    Array<{ url: string; title: string; description: string; summary?: string }>
+  > = {}
 
-  for (const version of pageVersions) {
+  for (const page of pages) {
     try {
-      const urlPath = new URL(version.page.url).pathname
+      const urlPath = new URL(page.url).pathname
       const pathSegments = urlPath.split("/").filter((s) => s)
       const category = pathSegments[0] || "root"
 
       if (!pagesByPath[category]) {
         pagesByPath[category] = []
       }
-      pagesByPath[category].push(version)
+      pagesByPath[category].push(page)
     } catch (error) {
       // If URL parsing fails, put in "other" category
       if (!pagesByPath.other) {
         pagesByPath.other = []
       }
-      pagesByPath.other.push(version)
+      pagesByPath.other.push(page)
     }
   }
 
@@ -222,20 +257,24 @@ function groupPagesByPath(
 }
 
 /**
- * Generate table of contents for llms-full.txt
+ * Generate table of contents for llms-full.txt (AI categorization)
  */
-function generateTableOfContents(
-  pagesByPath: Record<string, PageVersionWithPage[]>,
+function generateTableOfContentsForAI(
+  pagesByCategory: Record<
+    string,
+    Array<{ url: string; title: string; description: string; summary?: string }>
+  >,
 ): string[] {
   const sections: string[] = []
 
   sections.push("## Table of Contents")
   sections.push("")
 
-  for (const category of Object.keys(pagesByPath)) {
-    const categoryPages = pagesByPath[category]
+  for (const category of Object.keys(pagesByCategory)) {
+    const categoryPages = pagesByCategory[category]
     const count = categoryPages ? categoryPages.length : 0
-    sections.push(`- [${category}](#${category}) (${count} pages)`)
+    const anchor = category.toLowerCase().replace(/\s+/g, "-")
+    sections.push(`- [${category}](#${anchor}) (${count} pages)`)
   }
 
   sections.push("")
