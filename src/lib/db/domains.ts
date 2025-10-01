@@ -183,4 +183,54 @@ export const domainService = {
       where: { id },
     })
   },
+
+  /**
+   * Get all domains with stats for the table view
+   */
+  async getAllWithStats(): Promise<
+    (Domain & {
+      prompt_profile: PromptProfile | null
+      _count: {
+        pages: number
+      }
+      lastJob: (Job & { _count: { page_versions: number } }) | null
+    })[]
+  > {
+    const domains = await prisma.domain.findMany({
+      include: {
+        prompt_profile: true,
+        _count: {
+          select: {
+            pages: true,
+          },
+        },
+      },
+      orderBy: {
+        updated_at: "desc",
+      },
+    })
+
+    // Get the last job for each domain
+    const domainsWithLastJob = await Promise.all(
+      domains.map(async (domain) => {
+        const lastJob = await prisma.job.findFirst({
+          where: { domain_id: domain.id },
+          orderBy: { started_at: "desc" },
+          include: {
+            _count: {
+              select: {
+                page_versions: true,
+              },
+            },
+          },
+        })
+        return {
+          ...domain,
+          lastJob,
+        }
+      }),
+    )
+
+    return domainsWithLastJob
+  },
 }
