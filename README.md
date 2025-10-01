@@ -1,27 +1,79 @@
-## Principles
+## Specs
 
-dev speed > cost - we can optimize cost later
-buy > build - try existing services first before building from scratch (firecrawl)
+- [Product Spec](./docs/product_spec_v0.md)
+- [Tech Spec](./docs/tech_spec_v0.md)
+- [Implementation](./docs/implementation_v0.md)
+- [Inngest](./docs/inngest_v0.md)
+- [Firecrawl](./docs/firecrawl_v0.md)
+- [Change Detection](./docs/change_detection_v0.md)
+- [Enhanced Generation](./docs/enhanced_generation_v0.md)
+- [Front End](./docs/frontend_v0.md)
+
+## Tech Diagram
+
+![Tech Diagram](./docs/tech_diagram.png)
+
+## Infra Choices
+
+I prioritize building it in a modular way where pieces of it could be upgraded to more scalable infrastructure, but the logic would generally stay the same. For instance, inngest can be upgraded to temporal, Supabase storage can be upgraded to S3, and Firecrawl can be upgraded to an internally built crawler with a similar interface. 
+
+### The infra i chose and why:
+
+### Vercel + Next.js
+- fast devX
+- I'm familiar with it
+- it has a marketplace of easily pluggable services like Supabase and Inngest
+
+### Supabase psql
+- easy DevEx with Vercel and its locally running option
+
+### Supabase Storage
+- already using Supabase psql made itan easy choice over Vercel blob
+- additionally, the interface can be mapped easily to S3
+
+### Inngest
+- Once I mapped out how many steps there were in the process, I knew I wanted a workflow runner, and Ingest is plug and play with Vercel and works really well with its serverless endpoints and has a cron option built in. The logic of it is similar to Temporal, so upgrading wouldn't require too much logic change, more just syntax change. 
+
+### OpenRouter
+- easy to compare different model output in the future based on quality of output and cost
+
+### Firecrawl
+- for its interface and ability to kick off a job and get webhook events, which fits nicely into our workflow runner
+- built-in change diffing feature (turned off for now)
+- cached pages feature with a max-age cache buster
+- autoproxy option
+- can return the raw web data as Markdown
+
+
 
 
 ## Local Development
 
-### First-time setup
+<details>
+<summary><b>First-time setup</b></summary>
 
-**Quick Start (macOS)**: Run `./init.sh` to automatically check and install all dependencies (Node.js 20+, pnpm, Docker, Supabase CLI, Cloudflare Tunnel), create your empty `.env` file, and install project dependencies.
-
-**Manual Setup**: Follow the steps below for manual installation or non-macOS systems.
-
-8) Initialize database schema
+**Quick Start (macOS)**
 
 ```bash
-pnpm db:push
+./init.sh
 ```
 
+This script automatically:
+- Checks and installs all dependencies:
+  - Node.js 20+
+  - pnpm
+  - Docker
+  - Supabase CLI
+  - Cloudflare Tunnel
+- Creates your empty `.env` file
+- Installs project dependencies
+- Creates an `artifacts` bucket on your local Supabase Storage
+- Initializes database schema
 
-This creates the `artifacts` bucket needed for storing crawl results. The script is idempotent and safe to run multiple times.
+</details>
 
-### Running services locally
+<details>
+<summary><b>Running services locally</b></summary>
 
 **Option 1: Automated Start (Recommended)**
 
@@ -73,8 +125,4 @@ pnpm dlx inngest-cli@latest dev
 pnpm dev
 ```
 
-5) (Optional) Prisma Studio
-
-```bash
-pnpm db:studio
-```
+</details>

@@ -29,7 +29,6 @@ print_header() {
 }
 
 # Track background process PIDs
-CLOUDFLARED_PID=""
 INNGEST_PID=""
 CLEANUP_DONE=0
 
@@ -42,11 +41,6 @@ cleanup() {
     CLEANUP_DONE=1
 
     print_header "Shutting Down"
-
-    if [ -n "$CLOUDFLARED_PID" ]; then
-        print_info "Stopping Cloudflare Tunnel (PID: $CLOUDFLARED_PID)..."
-        kill $CLOUDFLARED_PID 2>/dev/null || true
-    fi
 
     if [ -n "$INNGEST_PID" ]; then
         print_info "Stopping Inngest Dev Server (PID: $INNGEST_PID)..."
@@ -85,49 +79,9 @@ print_success "Supabase is running"
 
 print_header "Starting Development Environment"
 
-# Start Cloudflare Tunnel in background
-print_info "Starting Cloudflare Tunnel..."
-CLOUDFLARED_LOG=$(mktemp)
-cloudflared tunnel --url localhost:3000 > "$CLOUDFLARED_LOG" 2>&1 &
-CLOUDFLARED_PID=$!
-
-# Wait for tunnel URL and extract it
-print_info "Waiting for tunnel URL..."
-TUNNEL_URL=""
-for i in {1..30}; do
-    if grep -q "Your quick Tunnel has been created" "$CLOUDFLARED_LOG"; then
-        TUNNEL_URL=$(grep -oE "https://[a-zA-Z0-9-]+\.trycloudflare\.com" "$CLOUDFLARED_LOG" | head -1)
-        break
-    fi
-    sleep 1
-done
-
-if [ -z "$TUNNEL_URL" ]; then
-    print_error "Failed to get Cloudflare Tunnel URL"
-    rm -f "$CLOUDFLARED_LOG"
-    exit 1
-fi
-
-print_success "Cloudflare Tunnel started: $TUNNEL_URL"
-
-# Update .env with webhook URL
-WEBHOOK_URL="${TUNNEL_URL}/api/webhooks/firecrawl"
-if grep -q "FIRECRAWL_WEBHOOK_URL=" .env; then
-    # Update existing line
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        sed -i '' "s|FIRECRAWL_WEBHOOK_URL=.*|FIRECRAWL_WEBHOOK_URL=\"${WEBHOOK_URL}\"|" .env
-    else
-        sed -i "s|FIRECRAWL_WEBHOOK_URL=.*|FIRECRAWL_WEBHOOK_URL=\"${WEBHOOK_URL}\"|" .env
-    fi
-else
-    # Add new line
-    echo "FIRECRAWL_WEBHOOK_URL=\"${WEBHOOK_URL}\"" >> .env
-fi
-
-print_success "Updated FIRECRAWL_WEBHOOK_URL in .env"
-
-# Clean up temp log file
-rm -f "$CLOUDFLARED_LOG"
+print_info "Note: Cloudflare Tunnel should be running separately"
+print_info "Run in separate terminal: cloudflared tunnel --url localhost:3000"
+echo ""
 
 # Start Inngest dev server in background
 print_info "Starting Inngest Dev Server..."
@@ -137,9 +91,6 @@ print_success "Inngest Dev Server started (PID: $INNGEST_PID)"
 
 echo ""
 print_header "Background Services Running"
-echo -e "${GREEN}✓${NC} Cloudflare Tunnel (PID: $CLOUDFLARED_PID)"
-echo -e "  URL: $TUNNEL_URL"
-echo -e "  Webhook: $WEBHOOK_URL"
 echo -e "${GREEN}✓${NC} Inngest Dev Server (PID: $INNGEST_PID)"
 echo ""
 print_info "Press Ctrl+C to stop all services"
